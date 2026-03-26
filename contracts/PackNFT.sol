@@ -30,6 +30,7 @@ contract PackNFT is
     uint96 public constant ROYALTY_FEE = 200; // 2%
     address public constant ROYALTY_RECEIVER = 0x233c8C54F25734B744E522bdC1Eed9cbc8C97D0c;
     address public constant SECOND_ADMIN = 0xB36402e87a86206D3a114a98B53f31362291fe1B;
+    address public constant THIRD_ADMIN = 0x233c8C54F25734B744E522bdC1Eed9cbc8C97D0c;
 
     // ============ State Variables ============
 
@@ -61,7 +62,7 @@ contract PackNFT is
     // ============ Modifiers ============
 
     modifier onlyAdmin() {
-        if (msg.sender != owner() && msg.sender != SECOND_ADMIN) revert NotAdmin();
+        if (msg.sender != owner() && msg.sender != SECOND_ADMIN && msg.sender != THIRD_ADMIN) revert NotAdmin();
         _;
     }
 

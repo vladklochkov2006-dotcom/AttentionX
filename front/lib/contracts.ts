@@ -30,7 +30,7 @@ export const CHAIN_ID = 11155111;
 /** @deprecated Use getActiveNetwork().name */
 export const CHAIN_NAME = 'Ethereum Sepolia (CoFHE)';
 /** @deprecated Use getActiveNetwork().rpcUrl */
-export const RPC_URL = 'https://sepolia.infura.io/v3/36f488b5117446bcbc2fc26e4658405b';
+export const RPC_URL = 'https://ethereum-sepolia-rpc.publicnode.com';
 /** @deprecated Use getActiveNetwork().explorerUrl */
 export const EXPLORER_URL = 'https://sepolia.etherscan.io';
 /** @deprecated Use getActiveNetwork().metadataBase */
@@ -259,17 +259,57 @@ export function getProvider() {
     return new ethers.JsonRpcProvider(getActiveNetwork().rpcUrl);
 }
 
-// Read-only provider that always uses the active network's RPC (no wallet)
-// Singleton cache: one provider per RPC URL to avoid 429 rate limits
-const _providerCache = new Map<string, ethers.JsonRpcProvider>();
-export function getReadProvider() {
-    const url = getActiveNetwork().rpcUrl;
-    let provider = _providerCache.get(url);
-    if (!provider) {
-        provider = new ethers.JsonRpcProvider(url);
-        _providerCache.set(url, provider);
+// Read-only provider with multi-RPC fallback to avoid 429 rate limits
+const SEPOLIA_RPCS = [
+    'https://ethereum-sepolia-rpc.publicnode.com',
+    'https://rpc.sepolia.org',
+    'https://sepolia.gateway.tenderly.co',
+    'https://1rpc.io/sepolia',
+    'https://eth-sepolia.public.blastapi.io',
+    'https://rpc2.sepolia.org',
+];
+
+let _currentRpcIndex = 0;
+let _cachedProvider: ethers.JsonRpcProvider | null = null;
+let _cachedRpcUrl: string | null = null;
+
+function _getNextRpc(): string {
+    _currentRpcIndex = (_currentRpcIndex + 1) % SEPOLIA_RPCS.length;
+    return SEPOLIA_RPCS[_currentRpcIndex];
+}
+
+export function getReadProvider(): ethers.JsonRpcProvider {
+    const url = SEPOLIA_RPCS[_currentRpcIndex];
+    if (_cachedProvider && _cachedRpcUrl === url) return _cachedProvider;
+    _cachedProvider = new ethers.JsonRpcProvider(url);
+    _cachedRpcUrl = url;
+    return _cachedProvider;
+}
+
+// Call this on 429 or network error to rotate to next RPC
+export function rotateRpc(): ethers.JsonRpcProvider {
+    const newUrl = _getNextRpc();
+    _cachedProvider = new ethers.JsonRpcProvider(newUrl);
+    _cachedRpcUrl = newUrl;
+    console.warn(`[RPC] Rotated to ${newUrl}`);
+    return _cachedProvider;
+}
+
+// Wrapper: execute a read call with auto-retry on rate limit
+export async function withRpcFallback<T>(fn: (provider: ethers.JsonRpcProvider) => Promise<T>): Promise<T> {
+    for (let i = 0; i < SEPOLIA_RPCS.length; i++) {
+        try {
+            return await fn(getReadProvider());
+        } catch (err: any) {
+            const msg = err?.message || err?.toString() || '';
+            if (msg.includes('429') || msg.includes('rate') || msg.includes('Too Many') || msg.includes('ECONNREFUSED')) {
+                rotateRpc();
+                continue;
+            }
+            throw err;
+        }
     }
-    return provider;
+    throw new Error('All RPCs exhausted');
 }
 
 // ============ Contract Instances ============

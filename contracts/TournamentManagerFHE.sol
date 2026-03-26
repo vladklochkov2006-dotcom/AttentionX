@@ -54,6 +54,7 @@ contract TournamentManagerFHE is
 
     uint256 public constant LINEUP_SIZE = 5;
     address public constant SECOND_ADMIN = 0xB36402e87a86206D3a114a98B53f31362291fe1B;
+    address public constant THIRD_ADMIN = 0x233c8C54F25734B744E522bdC1Eed9cbc8C97D0c;
     uint256 public constant TOTAL_STARTUPS = 19;
 
     // ============ Enums ============
@@ -186,7 +187,7 @@ contract TournamentManagerFHE is
     // ============ Modifiers ============
 
     modifier onlyAdmin() {
-        if (msg.sender != owner() && msg.sender != SECOND_ADMIN) revert NotAdmin();
+        if (msg.sender != owner() && msg.sender != SECOND_ADMIN && msg.sender != THIRD_ADMIN) revert NotAdmin();
         _;
     }
 
@@ -262,7 +263,7 @@ contract TournamentManagerFHE is
     }
 
     function addToPrizePool(uint256 tournamentId) external payable {
-        if (msg.sender != owner() && msg.sender != SECOND_ADMIN && msg.sender != packOpener) revert UnauthorizedCaller();
+        if (msg.sender != owner() && msg.sender != SECOND_ADMIN && msg.sender != THIRD_ADMIN && msg.sender != packOpener) revert UnauthorizedCaller();
 
         Tournament storage tournament = tournaments[tournamentId];
         if (tournament.id == 0) revert TournamentDoesNotExist();
@@ -422,6 +423,9 @@ contract TournamentManagerFHE is
             FHE.allow(newTotal, owner());
             if (SECOND_ADMIN != address(0)) {
                 FHE.allow(newTotal, SECOND_ADMIN);
+            }
+            if (THIRD_ADMIN != address(0)) {
+                FHE.allow(newTotal, THIRD_ADMIN);
             }
             encryptedTotalScore[tournamentId] = newTotal;
         }

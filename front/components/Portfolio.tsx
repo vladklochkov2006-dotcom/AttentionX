@@ -42,7 +42,7 @@ interface PortfolioProps {
 }
 
 const Portfolio: React.FC<PortfolioProps> = ({ onBuyPack, onOpenPacks, packRefreshSignal }) => {
-    const packPriceLabel = '0.0009';
+    const packPriceLabel = '0.01';
     const networkId = getActiveNetworkId();
     const [activeTab, setActiveTab] = useState<'cards' | 'performance'>('cards');
     const [myCards, setMyCards] = useState<CardData[]>([]);
@@ -732,7 +732,7 @@ const Portfolio: React.FC<PortfolioProps> = ({ onBuyPack, onOpenPacks, packRefre
                                                 }
                                             }}
                                         >
-                                            <img src="/image.png" alt="Pack" className="absolute inset-0 w-full h-full object-contain p-1.5" loading="lazy" />
+                                            <img src="/fhenix card pack.jpg" alt="Pack" className="absolute inset-0 w-full h-full object-contain p-1.5" loading="lazy" />
                                             {/* Selection badge */}
                                             {isPackSelectMode && isSelected && (
                                                 <div className="absolute top-2 right-2 w-6 h-6 bg-yc-purple rounded-full flex items-center justify-center z-10 shadow-lg">
@@ -1468,7 +1468,7 @@ const Portfolio: React.FC<PortfolioProps> = ({ onBuyPack, onOpenPacks, packRefre
                         {/* Pack Preview */}
                         <div className="flex items-center gap-4 mb-4 p-3 bg-gray-100 dark:bg-black/50 rounded-xl">
                             <div className="w-16 h-16 rounded-lg overflow-hidden shrink-0 bg-gray-100 dark:bg-black/30">
-                                <img src="/image.png" alt="Pack" className="w-full h-full object-contain" />
+                                <img src="/fhenix card pack.jpg" alt="Pack" className="w-full h-full object-contain" />
                             </div>
                             <div>
                                 <h4 className="text-gray-900 dark:text-white font-bold">AttentionX Pack</h4>

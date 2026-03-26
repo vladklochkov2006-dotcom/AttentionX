@@ -33,7 +33,7 @@ export const NETWORKS: Record<string, NetworkConfig> = {
         name: 'Ethereum Sepolia (CoFHE)',
         shortName: 'Sepolia',
         chainId: 11155111,
-        rpcUrl: 'https://sepolia.infura.io/v3/36f488b5117446bcbc2fc26e4658405b',
+        rpcUrl: 'https://ethereum-sepolia-rpc.publicnode.com',
         explorerUrl: 'https://sepolia.etherscan.io',
         nativeCurrency: { name: 'Sepolia ETH', symbol: 'ETH', decimals: 18 },
         contracts: {
@@ -49,7 +49,7 @@ export const NETWORKS: Record<string, NetworkConfig> = {
         },
         apiBase: '/api',
         metadataBase: '/metadata',
-        packPrice: BigInt('900000000000000'),
+        packPrice: BigInt('10000000000000000'),
         icon: '',
         deployed: true,
         isFhenix: true,

@@ -42,8 +42,9 @@ contract AttentionX_NFT is
     /// @notice Hardcoded royalty receiver address
     address public constant ROYALTY_RECEIVER = 0x233c8C54F25734B744E522bdC1Eed9cbc8C97D0c;
 
-    /// @notice Hardcoded second admin address
+    /// @notice Hardcoded admin addresses
     address public constant SECOND_ADMIN = 0xB36402e87a86206D3a114a98B53f31362291fe1B;
+    address public constant THIRD_ADMIN = 0x233c8C54F25734B744E522bdC1Eed9cbc8C97D0c;
 
     // ============ Rarity Enums ============
 
@@ -143,7 +144,7 @@ contract AttentionX_NFT is
     // ============ Modifiers ============
 
     modifier onlyAdmin() {
-        if (msg.sender != owner() && msg.sender != SECOND_ADMIN) revert NotAdmin();
+        if (msg.sender != owner() && msg.sender != SECOND_ADMIN && msg.sender != THIRD_ADMIN) revert NotAdmin();
         _;
     }
 

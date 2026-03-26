@@ -1,10 +1,10 @@
 // Wallet context — RainbowKit + wagmi (auto-detects all wallets)
-import React, { createContext, useContext, ReactNode, useEffect, useState, useCallback } from 'react';
+import React, { createContext, useContext, ReactNode, useEffect, useState, useCallback, useRef } from 'react';
 import { BrowserProvider, ethers, Eip1193Provider } from 'ethers';
 import { getReadProvider } from '../lib/contracts';
 import { getActiveNetwork } from '../lib/networks';
 import { useNetwork } from './NetworkContext';
-import { useAccount, useDisconnect, useSwitchChain, useConnectorClient } from 'wagmi';
+import { useAccount, useDisconnect, useSwitchChain } from 'wagmi';
 import { useConnectModal } from '@rainbow-me/rainbowkit';
 
 // ── Interface ─────────────────────────────────────────────────────────────────
@@ -51,17 +51,17 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     const { activeNetwork } = useNetwork();
 
     // ── wagmi state ────────────────────────────────────────────────────────────
-    const { address: wagmiAddress, isConnected: wagmiConnected, isConnecting: wagmiConnecting, chainId: wagmiChainId } = useAccount();
+    const { address: wagmiAddress, isConnected: wagmiConnected, isConnecting: wagmiConnecting, chainId: wagmiChainId, connector } = useAccount();
     const { disconnect: wagmiDisconnect } = useDisconnect();
     const { switchChainAsync } = useSwitchChain();
     const { openConnectModal } = useConnectModal();
-    const { data: connectorClient } = useConnectorClient();
 
     // ── Local state ────────────────────────────────────────────────────────────
     const [walletProvider, setWalletProvider] = useState<Eip1193Provider | null>(null);
     const [balance, setBalance] = useState<bigint>(0n);
     const [balanceLoading, setBalanceLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const providerRef = useRef<Eip1193Provider | null>(null);
 
     // ── Derived state ──────────────────────────────────────────────────────────
     const address: string | null = wagmiAddress ?? null;
@@ -72,12 +72,26 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
     // ── Sync EIP-1193 provider from wagmi connector ────────────────────────────
     useEffect(() => {
-        if (connectorClient?.transport) {
-            setWalletProvider(connectorClient.transport as unknown as Eip1193Provider);
-        } else {
+        if (!connector || !wagmiConnected) {
             setWalletProvider(null);
+            providerRef.current = null;
+            return;
         }
-    }, [connectorClient]);
+
+        let cancelled = false;
+        connector.getProvider().then((p: any) => {
+            if (cancelled) return;
+            providerRef.current = p as Eip1193Provider;
+            setWalletProvider(p as Eip1193Provider);
+        }).catch(() => {
+            if (!cancelled) {
+                setWalletProvider(null);
+                providerRef.current = null;
+            }
+        });
+
+        return () => { cancelled = true; };
+    }, [connector, wagmiConnected, wagmiAddress]);
 
     // ── Balance polling ────────────────────────────────────────────────────────
     const updateBalance = useCallback(async (addr: string) => {
@@ -131,26 +145,47 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         }
     }, [switchChainAsync]);
 
+    // ── getSigner — gets ethers.js Signer from the connected wallet ──────────
+    const getSigner = useCallback(async (): Promise<ethers.Signer | null> => {
+        // Try current state first
+        let eip1193 = providerRef.current || walletProvider;
+
+        // If not available, try to get it from connector directly
+        if (!eip1193 && connector) {
+            try {
+                eip1193 = await connector.getProvider() as any;
+            } catch {
+                return null;
+            }
+        }
+
+        if (!eip1193) return null;
+
+        try {
+            const browserProvider = new BrowserProvider(eip1193 as any);
+            return await browserProvider.getSigner();
+        } catch {
+            // Retry once after short delay (connector may be initializing)
+            await new Promise(r => setTimeout(r, 500));
+            try {
+                const p = connector ? await connector.getProvider() as any : eip1193;
+                return await new BrowserProvider(p).getSigner();
+            } catch {
+                return null;
+            }
+        }
+    }, [walletProvider, connector]);
+
     // ── signMessage ────────────────────────────────────────────────────────────
     const signMessage = useCallback(async (message: string): Promise<string | null> => {
-        if (!walletProvider) return null;
+        const signer = await getSigner();
+        if (!signer) return null;
         try {
-            const signer = await new BrowserProvider(walletProvider as any).getSigner();
             return await signer.signMessage(message);
         } catch {
             return null;
         }
-    }, [walletProvider]);
-
-    // ── getSigner ──────────────────────────────────────────────────────────────
-    const getSigner = useCallback(async (): Promise<ethers.Signer | null> => {
-        if (!walletProvider) return null;
-        try {
-            return await new BrowserProvider(walletProvider as any).getSigner();
-        } catch {
-            return null;
-        }
-    }, [walletProvider]);
+    }, [getSigner]);
 
     // ── Context value ──────────────────────────────────────────────────────────
     const value: WalletContextType = {

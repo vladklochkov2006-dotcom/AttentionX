@@ -41,6 +41,7 @@ contract PackOpener is Initializable, Ownable2StepUpgradeable, PausableUpgradeab
     uint256 public constant PLATFORM_PERCENT = 10;
 
     address public constant SECOND_ADMIN = 0xB36402e87a86206D3a114a98B53f31362291fe1B;
+    address public constant THIRD_ADMIN = 0x233c8C54F25734B744E522bdC1Eed9cbc8C97D0c;
 
     uint256 private constant COMMON_THRESHOLD = 70;
     uint256 private constant RARE_THRESHOLD = 95;
@@ -107,7 +108,7 @@ contract PackOpener is Initializable, Ownable2StepUpgradeable, PausableUpgradeab
     // ============ Modifiers ============
 
     modifier onlyAdmin() {
-        if (msg.sender != owner() && msg.sender != SECOND_ADMIN) revert NotAdmin();
+        if (msg.sender != owner() && msg.sender != SECOND_ADMIN && msg.sender != THIRD_ADMIN) revert NotAdmin();
         _;
     }
 

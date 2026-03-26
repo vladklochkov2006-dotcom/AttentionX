@@ -144,9 +144,20 @@ const AdminPanel: React.FC = () => {
         setTimeout(() => setMessage(null), 5000);
     };
 
+    // Helper: get signer or show error
+    const requireSigner = async () => {
+        const signer = await requireSigner();
+        if (!signer) {
+            showMessage('error', 'Wallet not connected or signer unavailable. Reconnect your wallet.');
+            console.error('[Admin] getSigner() returned null. isConnected:', isConnected, 'address:', address);
+            return null;
+        }
+        return signer;
+    };
+
     // Action handlers
     const handleWithdraw = async () => {
-        const signer = await getSigner();
+        const signer = await requireSigner();
         if (!signer) return;
 
         const result = await admin.withdrawPackOpener(signer);
@@ -159,7 +170,7 @@ const AdminPanel: React.FC = () => {
     };
 
     const handleSetPackPrice = async () => {
-        const signer = await getSigner();
+        const signer = await requireSigner();
         if (!signer) return;
 
         const price = parseFloat(newPackPrice);
@@ -178,7 +189,7 @@ const AdminPanel: React.FC = () => {
     };
 
     const handleSetActiveTournament = async () => {
-        const signer = await getSigner();
+        const signer = await requireSigner();
         if (!signer) return;
 
         const id = parseInt(newActiveTournament);
@@ -197,7 +208,7 @@ const AdminPanel: React.FC = () => {
     };
 
     const handleCreateTournament = async () => {
-        const signer = await getSigner();
+        const signer = await requireSigner();
         if (!signer) return;
 
         const regStart = new Date(tournamentForm.regStart).getTime() / 1000;
@@ -226,7 +237,7 @@ const AdminPanel: React.FC = () => {
     };
 
     const handlePausePackOpener = async () => {
-        const signer = await getSigner();
+        const signer = await requireSigner();
         if (!signer) return;
 
         try {
@@ -238,7 +249,7 @@ const AdminPanel: React.FC = () => {
     };
 
     const handleUnpausePackOpener = async () => {
-        const signer = await getSigner();
+        const signer = await requireSigner();
         if (!signer) return;
 
         try {
@@ -251,7 +262,7 @@ const AdminPanel: React.FC = () => {
 
     // Tournament management handlers
     const handleCancelTournament = async (tournamentId: number) => {
-        const signer = await getSigner();
+        const signer = await requireSigner();
         if (!signer) return;
 
         setActionLoading('cancel');
@@ -268,7 +279,7 @@ const AdminPanel: React.FC = () => {
     };
 
     const handleFinalizeTournament = async (tournamentId: number) => {
-        const signer = await getSigner();
+        const signer = await requireSigner();
         if (!signer) return;
 
         setActionLoading('finalize');
@@ -286,7 +297,7 @@ const AdminPanel: React.FC = () => {
     };
 
     const handleEmergencyWithdraw = async () => {
-        const signer = await getSigner();
+        const signer = await requireSigner();
         if (!signer || !balances) return;
 
         setActionLoading('withdraw');
@@ -312,7 +323,7 @@ const AdminPanel: React.FC = () => {
 
     // Withdraw from cancelled tournament prize pool
     const handleWithdrawFromTournament = async (tournament: TournamentData) => {
-        const signer = await getSigner();
+        const signer = await requireSigner();
         if (!signer) return;
 
         setActionLoading('withdraw-' + tournament.id);
@@ -338,7 +349,7 @@ const AdminPanel: React.FC = () => {
 
     // Finalize tournament with points
     const handleFinalizeWithPoints = async () => {
-        const signer = await getSigner();
+        const signer = await requireSigner();
         if (!signer || !showPointsModal) return;
 
         setActionLoading('finalize-points');
@@ -441,7 +452,7 @@ const AdminPanel: React.FC = () => {
     };
 
     const handleCreateTournamentFHE = async () => {
-        const signer = await getSigner();
+        const signer = await requireSigner();
         if (!signer) return;
 
         const regStart = new Date(fheTournamentForm.regStart).getTime() / 1000;
@@ -474,7 +485,7 @@ const AdminPanel: React.FC = () => {
     };
 
     const handleSetEncryptedPointsFHE = async () => {
-        const signer = await getSigner();
+        const signer = await requireSigner();
         if (!signer || !fheSelectedTournament) return;
 
         setActionLoading('fhe-points');
@@ -565,7 +576,7 @@ const AdminPanel: React.FC = () => {
     };
 
     const handleComputeScoresFHE = async () => {
-        const signer = await getSigner();
+        const signer = await requireSigner();
         if (!signer || !fheSelectedTournament) return;
 
         setActionLoading('fhe-scores');
@@ -580,7 +591,7 @@ const AdminPanel: React.FC = () => {
     };
 
     const handleFinalizeScoresFHE = async () => {
-        const signer = await getSigner();
+        const signer = await requireSigner();
         if (!signer || !fheSelectedTournament) return;
 
         setActionLoading('fhe-finalize-scores');
@@ -596,7 +607,7 @@ const AdminPanel: React.FC = () => {
     };
 
     const handleComputeDarkRanksFHE = async () => {
-        const signer = await getSigner();
+        const signer = await requireSigner();
         if (!signer || !fheSelectedTournament) return;
 
         setActionLoading('fhe-ranks');
@@ -612,7 +623,7 @@ const AdminPanel: React.FC = () => {
     };
 
     const handleFinalizeWithPrizesFHE = async () => {
-        const signer = await getSigner();
+        const signer = await requireSigner();
         if (!signer || !fheSelectedTournament) return;
 
         setActionLoading('fhe-finalize-prizes');
