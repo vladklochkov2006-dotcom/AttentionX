@@ -15,7 +15,7 @@ const { ethers } = require("ethers");
 const NETWORKS = {
     fhenix: {
         name: "Fhenix CoFHE (Sepolia)",
-        rpc: process.env.SEPOLIA_RPC_URL || "https://rpc.sepolia.org",
+        rpc: process.env.SEPOLIA_RPC_URL || "https://ethereum-sepolia-rpc.publicnode.com",
         port: 3006,
         deploymentFile: "deployment-cofhe.json",
         imageBase: "https://app.attnx.fun/metadata/images",
@@ -170,9 +170,16 @@ async function fetchTokenData(tokenId) {
             };
             setCachedToken(tokenId, data);
             return data;
-        } catch {
-            setCachedToken(tokenId, { startupId: 0, nonExistent: true });
-            return { error: "Token does not exist or has been burned" };
+        } catch (err) {
+            const msg = err?.message || '';
+            // Only cache as nonExistent if it's a contract revert (token truly doesn't exist)
+            // Don't cache network errors — they are transient
+            if (msg.includes('revert') || msg.includes('invalid token') || msg.includes('ERC721')) {
+                setCachedToken(tokenId, { startupId: 0, nonExistent: true });
+                return { error: "Token does not exist or has been burned" };
+            }
+            console.error(`RPC error for token ${tokenId}: ${msg.substring(0, 100)}`);
+            return { error: "Temporary RPC error — try again" };
         }
     }
 
@@ -272,7 +279,10 @@ app.get("/metadata/:tokenId", async (req, res) => {
         if (isNaN(tokenId) || tokenId < 1) return res.status(400).json({ error: "Invalid token ID" });
 
         const tokenData = await fetchTokenData(tokenId);
-        if (tokenData.error) return res.status(404).json({ error: tokenData.error });
+        if (tokenData.error) {
+            const status = tokenData.error.includes('Temporary') ? 503 : 404;
+            return res.status(status).json({ error: tokenData.error });
+        }
 
         const metadata = buildMetadata(tokenId, tokenData);
         if (metadata.error) return res.status(404).json({ error: metadata.error });
