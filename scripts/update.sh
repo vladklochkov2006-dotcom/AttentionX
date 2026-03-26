@@ -106,7 +106,7 @@ log "Frontend built"
 # No .env sync needed — metadata server reads directly from deployment-cofhe.json
 log "Contract addresses from deployment file (no .env sync needed):"
 if [ -f "${APP_DIR}/deployment-cofhe.json" ]; then
-    ADDR=$(node -e "console.log(JSON.parse(require('fs').readFileSync('${APP_DIR}/deployment-cofhe.json','utf8')).proxies.AttentionX_NFT || 'N/A')" 2>/dev/null || echo "N/A")
+    ADDR=$(node -e "console.log(JSON.parse(require('fs').readFileSync('${APP_DIR}/deployment-cofhe.json','utf8')).contracts.AttentionX_NFT || 'N/A')" 2>/dev/null || echo "N/A")
     log "  deployment-cofhe.json: ${ADDR}"
 fi
 
@@ -148,11 +148,13 @@ log "Starting services..."
 systemctl start attentionx-api
 systemctl start attentionx-metadata
 
-# ─── Reload nginx config (picks up burst/rate limit changes) ───
+# ─── Nginx + SSL setup ───
+DOMAIN="fhe.attnx.fun"
+NGINX_TARGET="/etc/nginx/sites-available/${DOMAIN}"
+CERT_PATH="/etc/letsencrypt/live/${DOMAIN}/fullchain.pem"
+
 if [ -f "${APP_DIR}/deploy/nginx.conf" ]; then
     log "Updating nginx config..."
-    DOMAIN="fhe.attnx.fun"
-    NGINX_TARGET="/etc/nginx/sites-available/${DOMAIN}"
 
     # Clean up old 'attentionx' config that conflicts with the canonical name
     if [ -f "/etc/nginx/sites-available/attentionx" ] && [ "attentionx" != "${DOMAIN}" ]; then
@@ -161,14 +163,42 @@ if [ -f "${APP_DIR}/deploy/nginx.conf" ]; then
         log "Removed old duplicate nginx config 'attentionx'"
     fi
 
-    cp "${APP_DIR}/deploy/nginx.conf" "$NGINX_TARGET"
-    ln -sf "$NGINX_TARGET" "/etc/nginx/sites-enabled/${DOMAIN}"
+    # If SSL cert doesn't exist yet — create temp HTTP-only config, obtain cert, then install full config
+    if [ ! -f "$CERT_PATH" ]; then
+        log "SSL cert not found — obtaining via certbot..."
+        mkdir -p /var/www/certbot
 
-    if nginx -t 2>/dev/null; then
-        systemctl reload nginx
-        log "Nginx reloaded"
+        # Temp HTTP-only config for ACME challenge
+        cat > "$NGINX_TARGET" <<'TMPEOF'
+server {
+    listen 80;
+    server_name fhe.attnx.fun;
+    location /.well-known/acme-challenge/ { root /var/www/certbot; allow all; }
+    location / { return 200 'waiting for ssl'; }
+}
+TMPEOF
+        ln -sf "$NGINX_TARGET" "/etc/nginx/sites-enabled/${DOMAIN}"
+        nginx -t 2>/dev/null && systemctl reload nginx
+
+        # Obtain certificate
+        certbot certonly --webroot -w /var/www/certbot -d "${DOMAIN}" --non-interactive --agree-tos --register-unsafely-without-email \
+            && log "SSL cert obtained" \
+            || warn "certbot failed — check DNS for ${DOMAIN}"
+    fi
+
+    # Install full config (with SSL)
+    if [ -f "$CERT_PATH" ]; then
+        cp "${APP_DIR}/deploy/nginx.conf" "$NGINX_TARGET"
+        ln -sf "$NGINX_TARGET" "/etc/nginx/sites-enabled/${DOMAIN}"
+
+        if nginx -t 2>/dev/null; then
+            systemctl reload nginx
+            log "Nginx reloaded with SSL"
+        else
+            warn "Nginx config test failed — skipping reload"
+        fi
     else
-        warn "Nginx config test failed — skipping reload"
+        warn "SSL cert still missing — keeping HTTP-only config"
     fi
 fi
 
@@ -204,7 +234,7 @@ echo -e "  ${CYAN}Contract verification:${NC}"
 
 DEPLOY_FILE="${APP_DIR}/deployment-cofhe.json"
 if [ -f "$DEPLOY_FILE" ]; then
-    EXPECTED_ADDR=$(node -e "console.log(JSON.parse(require('fs').readFileSync('${DEPLOY_FILE}','utf8')).proxies.AttentionX_NFT || '')" 2>/dev/null || echo "")
+    EXPECTED_ADDR=$(node -e "console.log(JSON.parse(require('fs').readFileSync('${DEPLOY_FILE}','utf8')).contracts.AttentionX_NFT || '')" 2>/dev/null || echo "")
     ACTUAL_ADDR=$(curl -s --max-time 5 "http://127.0.0.1:3006/" 2>/dev/null | node -e "process.stdin.on('data',d=>{try{console.log(JSON.parse(d).contract)}catch{console.log('?')}})" 2>/dev/null || echo "?")
 
     if [ "$ACTUAL_ADDR" = "$EXPECTED_ADDR" ]; then
