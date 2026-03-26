@@ -117,6 +117,13 @@ mkdir -p "${APP_DIR}/server/db"
 # ─── Fix ownership ───
 chown -R root:root "${APP_DIR}"
 
+# ─── Install / update systemd service files ───
+log "Installing systemd service files..."
+cp "${APP_DIR}/deploy/attentionx-api.service" /etc/systemd/system/
+cp "${APP_DIR}/deploy/attentionx-metadata.service" /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable attentionx-api attentionx-metadata 2>/dev/null || true
+
 # ─── Stop services, kill stale processes, then start clean ───
 log "Stopping services..."
 systemctl stop attentionx-api 2>/dev/null || true
