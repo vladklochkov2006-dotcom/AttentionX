@@ -2,7 +2,7 @@
 ###############################################################################
 # AttentionX — Quick Update from GitHub
 #
-# Usage: sudo bash /opt/attentionx/scripts/update.sh
+# Usage: sudo bash /root/AttentionX/scripts/update.sh
 #
 # What it does:
 #   1. git pull from GitHub
@@ -34,56 +34,49 @@ if [ "$(id -u)" -ne 0 ]; then
     err "Run as root: sudo bash $0"
 fi
 
-# Fix git ownership warning
-git config --global --add safe.directory "${APP_DIR}" 2>/dev/null || true
+# # ─── Git pull disabled temporarily ───
+# git config --global --add safe.directory "${APP_DIR}" 2>/dev/null || true
+#
+# if [ -d "${APP_DIR}/.git" ]; then
+#     cd "${APP_DIR}"
+#     CURRENT_REMOTE=$(git remote get-url origin 2>/dev/null || echo "")
+#     if [ "$CURRENT_REMOTE" != "$REPO" ]; then
+#         git remote remove origin 2>/dev/null || true
+#         git remote add origin "$REPO"
+#         log "Fixed remote origin → $REPO"
+#     fi
+# fi
+#
+# if [ ! -d "${APP_DIR}/.git" ]; then
+#     log "First time setup — cloning repo..."
+#     TEMP_DIR=$(mktemp -d)
+#     [ -f "${APP_DIR}/.env" ] && cp "${APP_DIR}/.env" "${TEMP_DIR}/.env"
+#     [ -f "${APP_DIR}/server/db/attentionx.db" ] && cp "${APP_DIR}/server/db/attentionx.db" "${TEMP_DIR}/attentionx.db"
+#     rm -rf "${APP_DIR:?}/.git"
+#     cd "${APP_DIR}"
+#     git init
+#     git remote add origin "$REPO"
+#     git fetch origin main
+#     git checkout -f main
+#     [ -f "${TEMP_DIR}/.env" ] && cp "${TEMP_DIR}/.env" "${APP_DIR}/.env"
+#     [ -f "${TEMP_DIR}/attentionx.db" ] && mkdir -p "${APP_DIR}/server/db" && cp "${TEMP_DIR}/attentionx.db" "${APP_DIR}/server/db/attentionx.db"
+#     rm -rf "$TEMP_DIR"
+#     log "Repo cloned"
+# else
+#     log "Pulling latest changes..."
+#     cd "${APP_DIR}"
+#     git fetch origin main
+#     git reset --hard origin/main
+#     log "Pull complete"
+# fi
+#
+# echo ""
+# log "Recent commits:"
+# git log --oneline -5
+# echo ""
 
-# ─── Ensure remote is set correctly ───
-if [ -d "${APP_DIR}/.git" ]; then
-    cd "${APP_DIR}"
-    CURRENT_REMOTE=$(git remote get-url origin 2>/dev/null || echo "")
-    if [ "$CURRENT_REMOTE" != "$REPO" ]; then
-        git remote remove origin 2>/dev/null || true
-        git remote add origin "$REPO"
-        log "Fixed remote origin → $REPO"
-    fi
-fi
-
-# ─── Check if repo exists, clone or pull ───
-if [ ! -d "${APP_DIR}/.git" ]; then
-    log "First time setup — cloning repo..."
-    # Save .env and db before clone
-    TEMP_DIR=$(mktemp -d)
-    [ -f "${APP_DIR}/.env" ] && cp "${APP_DIR}/.env" "${TEMP_DIR}/.env"
-    [ -f "${APP_DIR}/server/db/attentionx.db" ] && cp "${APP_DIR}/server/db/attentionx.db" "${TEMP_DIR}/attentionx.db"
-
-    # Clone
-    rm -rf "${APP_DIR:?}/.git"
-    cd "${APP_DIR}"
-    git init
-    git remote add origin "$REPO"
-    git fetch origin main
-    git checkout -f main
-
-    # Restore .env and db
-    [ -f "${TEMP_DIR}/.env" ] && cp "${TEMP_DIR}/.env" "${APP_DIR}/.env"
-    [ -f "${TEMP_DIR}/attentionx.db" ] && mkdir -p "${APP_DIR}/server/db" && cp "${TEMP_DIR}/attentionx.db" "${APP_DIR}/server/db/attentionx.db"
-    rm -rf "$TEMP_DIR"
-
-    log "Repo cloned"
-else
-    log "Pulling latest changes..."
-    cd "${APP_DIR}"
-    # Hard reset to match remote (safe: .env, db, logs are gitignored)
-    git fetch origin main
-    git reset --hard origin/main
-    log "Pull complete"
-fi
-
-# ─── Show what changed ───
-echo ""
-log "Recent commits:"
-git log --oneline -5
-echo ""
+log "Skipping git pull (disabled temporarily)"
+cd "${APP_DIR}"
 
 # ─── Install server deps (if package.json changed) ───
 log "Installing server dependencies..."
@@ -100,7 +93,12 @@ log "Building frontend..."
 cd "${APP_DIR}/front"
 npm ci --silent 2>&1 | tail -3 || npm install --silent 2>&1 | tail -3
 npm run build
-log "Frontend built"
+
+# Verify build output exists
+if [ ! -f "${APP_DIR}/front/dist/index.html" ]; then
+    err "Frontend build failed — dist/index.html not found!"
+fi
+log "Frontend built — dist/index.html exists"
 
 # ─── Contract addresses ───
 # No .env sync needed — metadata server reads directly from deployment-cofhe.json
@@ -114,8 +112,12 @@ fi
 mkdir -p "${APP_DIR}/server/data"
 mkdir -p "${APP_DIR}/server/db"
 
-# ─── Fix ownership ───
-chown -R root:root "${APP_DIR}"
+# ─── Deploy frontend to /var/www (standard nginx path) ───
+WEBROOT="/var/www/fhe.attnx.fun"
+mkdir -p "$WEBROOT"
+rsync -a --delete "${APP_DIR}/front/dist/" "$WEBROOT/"
+chown -R www-data:www-data "$WEBROOT"
+log "Frontend deployed to ${WEBROOT} ($(ls "$WEBROOT" | wc -l) files)"
 
 # ─── Install / update systemd service files ───
 log "Installing systemd service files..."
@@ -214,7 +216,11 @@ TMPEOF
         cp "${APP_DIR}/deploy/nginx.conf" "$NGINX_TARGET"
         ln -sf "$NGINX_TARGET" "/etc/nginx/sites-enabled/${DOMAIN}"
 
-        if nginx -t 2>/dev/null; then
+        # Remove default site that may intercept requests
+        rm -f /etc/nginx/sites-enabled/default
+
+        log "Testing nginx config..."
+        if nginx -t; then
             if systemctl is-active --quiet nginx; then
                 systemctl reload nginx
             else
@@ -222,7 +228,7 @@ TMPEOF
             fi
             log "Nginx running with SSL"
         else
-            warn "Nginx config test failed — skipping reload"
+            err "Nginx config test FAILED — see errors above"
         fi
     else
         warn "SSL cert still missing — keeping HTTP-only config"
@@ -260,6 +266,19 @@ if [ -f "$DEPLOY_FILE" ]; then
         warn "Metadata server using wrong contract! Check deployment-cofhe.json"
     fi
 fi
+
+# ─── Frontend diagnostics ───
+echo -e "  ${CYAN}Frontend:${NC}"
+if [ -f "/var/www/fhe.attnx.fun/index.html" ]; then
+    echo -e "  /var/www/fhe.attnx.fun/index.html:  ${GREEN}EXISTS${NC}"
+else
+    echo -e "  /var/www/fhe.attnx.fun/index.html:  ${RED}MISSING${NC}"
+fi
+
+# Quick curl test
+echo -e "  ${CYAN}Quick HTTP test:${NC}"
+HTTP_CODE=$(curl -sk -o /dev/null -w "%{http_code}" "https://${DOMAIN}/" 2>/dev/null || echo "000")
+echo -e "  GET https://${DOMAIN}/:   ${HTTP_CODE} $([ "$HTTP_CODE" = "200" ] && echo "${GREEN}OK${NC}" || echo "${RED}CHECK${NC}")"
 
 echo ""
 log "Update complete!"

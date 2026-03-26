@@ -1,6 +1,7 @@
 // Contract addresses and ABIs for AttentionX
 import { ethers } from 'ethers';
 import { getActiveNetwork } from './networks';
+import { TOURNAMENT_FHE_ABI, DARK_LEADERBOARD_ABI } from '../hooks/useTournamentFHE';
 
 declare global { interface Window { ethereum?: ethers.Eip1193Provider } }
 
@@ -305,8 +306,6 @@ export function getTournamentFHEContract(signerOrProvider?: ethers.Signer | ethe
     const provider = signerOrProvider || getReadProvider();
     const addr = getActiveNetwork().contracts.TournamentManagerFHE;
     if (!addr) throw new Error('TournamentManagerFHE not deployed on active network');
-    // ABI imported from useTournamentFHE hook
-    const { TOURNAMENT_FHE_ABI } = require('../hooks/useTournamentFHE');
     return new ethers.Contract(addr, TOURNAMENT_FHE_ABI, provider);
 }
 
@@ -314,7 +313,6 @@ export function getDarkLeaderboardContract(signerOrProvider?: ethers.Signer | et
     const provider = signerOrProvider || getReadProvider();
     const addr = getActiveNetwork().contracts.DarkLeaderboard;
     if (!addr) throw new Error('DarkLeaderboard not deployed on active network');
-    const { DARK_LEADERBOARD_ABI } = require('../hooks/useTournamentFHE');
     return new ethers.Contract(addr, DARK_LEADERBOARD_ABI, provider);
 }
 
