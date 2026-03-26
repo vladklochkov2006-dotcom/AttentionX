@@ -1,10 +1,10 @@
 #!/bin/bash
 # AttentionX — Health check & auto-restart
-# Runs via cron: */5 * * * * /opt/attentionx/deploy/healthcheck.sh
+# Runs via cron: */5 * * * * /root/AttentionX/deploy/healthcheck.sh
 
 set -uo pipefail
 
-LOG_FILE="/opt/attentionx/logs/healthcheck.log"
+LOG_FILE="/root/AttentionX/logs/healthcheck.log"
 MAX_RETRIES=3
 RETRY_DELAY=5
 

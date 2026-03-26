@@ -6,11 +6,11 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=attentionx
-Group=attentionx
-WorkingDirectory=/opt/attentionx/server
+User=root
+Group=root
+WorkingDirectory=/root/AttentionX/server
 ExecStart=/usr/bin/node index.js
-EnvironmentFile=/opt/attentionx/.env
+EnvironmentFile=/root/AttentionX/.env
 Environment=NODE_ENV=production
 Environment=PORT=3007
 

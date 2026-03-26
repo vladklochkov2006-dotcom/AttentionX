@@ -17,7 +17,7 @@
 
 set -euo pipefail
 
-APP_DIR="/opt/attentionx"
+APP_DIR="/root/AttentionX"
 REPO="https://github.com/vladklochkov2006-dotcom/AttentionX.git"
 
 RED='\033[0;31m'
@@ -115,7 +115,7 @@ mkdir -p "${APP_DIR}/server/data"
 mkdir -p "${APP_DIR}/server/db"
 
 # ─── Fix ownership ───
-chown -R attentionx:attentionx "${APP_DIR}"
+chown -R root:root "${APP_DIR}"
 
 # ─── Stop services, kill stale processes, then start clean ───
 log "Stopping services..."
