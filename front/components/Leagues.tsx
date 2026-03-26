@@ -151,8 +151,10 @@ const Leagues: React.FC = () => {
 
                 // Determine phase (check contract status for finalized)
                 const now = Date.now() / 1000;
-                if (tournament.status === 'Finalized') {
-                    setPhase('finalized');
+                if (tournament.status === 'Finalized' || tournament.status === 'Cancelled') {
+                    setPhase(tournament.status === 'Finalized' ? 'finalized' : 'ended');
+                    setPendingReveal(false);
+                    setLineupRevealed(false);
                 } else if (now < tournament.registrationStart) {
                     setPhase('upcoming');
                 } else if (now >= tournament.registrationStart && now < tournament.startTime) {
@@ -168,6 +170,15 @@ const Leagues: React.FC = () => {
                 if (address) {
                     const entered = await hasEntered(tournamentIdToLoad, address);
                     setHasUserEntered(entered);
+
+                    // Clean up stale localStorage from old/cancelled tournaments
+                    if (!entered) {
+                        setPendingReveal(false);
+                        setLineupRevealed(false);
+                        // Clean up any leftover commit data for this tournament
+                        localStorage.removeItem(`attentionx:salt:${tournamentIdToLoad}:${address}`);
+                        localStorage.removeItem(`attentionx:cards:${tournamentIdToLoad}:${address}`);
+                    }
 
                     // Check commit/reveal status on-chain (FHE privacy mode)
                     if (entered && isFhenixNetwork()) {
