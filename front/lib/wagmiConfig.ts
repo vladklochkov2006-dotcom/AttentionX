@@ -1,12 +1,14 @@
-// Wagmi + RainbowKit config for Sepolia (CoFHE)
-import { getDefaultConfig } from '@rainbow-me/rainbowkit';
+// Wagmi config for Sepolia — injected wallets only (no WalletConnect)
+import { createConfig, http, fallback } from 'wagmi';
 import { sepolia } from 'wagmi/chains';
-import { http, fallback } from 'wagmi';
+import { injected, coinbaseWallet } from 'wagmi/connectors';
 
-export const wagmiConfig = getDefaultConfig({
-    appName: 'AttentionX',
-    projectId: 'attentionx', // placeholder — WalletConnect QR won't work without real ID
+export const wagmiConfig = createConfig({
     chains: [sepolia],
+    connectors: [
+        injected(),              // MetaMask, Rabby, Brave, Backpack, etc.
+        coinbaseWallet({ appName: 'AttentionX' }),
+    ],
     transports: {
         [sepolia.id]: fallback([
             http('https://ethereum-sepolia-rpc.publicnode.com'),
