@@ -28,8 +28,6 @@ import { useTheme } from './context/ThemeContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { WalletProvider, useWalletContext } from './context/WalletContext';
 import { NetworkProvider, useNetwork } from './context/NetworkContext';
-import { RainbowKitProvider, darkTheme } from '@rainbow-me/rainbowkit';
-import '@rainbow-me/rainbowkit/styles.css';
 import { WagmiProvider } from 'wagmi';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { wagmiConfig } from './lib/wagmiConfig';
@@ -675,18 +673,16 @@ const App: React.FC = () => {
     return (
         <WagmiProvider config={wagmiConfig}>
             <QueryClientProvider client={queryClient}>
-                <RainbowKitProvider theme={darkTheme({ accentColor: '#06B6D4', borderRadius: 'medium' })}>
-                    <ThemeProvider>
-                        <ErrorBoundary>
-                            <NetworkProvider>
-                                <WalletProvider>
-                                    {showSplash && <SplashScreen onReady={handleSplashReady} />}
-                                    <AppContent />
-                                </WalletProvider>
-                            </NetworkProvider>
-                        </ErrorBoundary>
-                    </ThemeProvider>
-                </RainbowKitProvider>
+                <ThemeProvider>
+                    <ErrorBoundary>
+                        <NetworkProvider>
+                            <WalletProvider>
+                                {showSplash && <SplashScreen onReady={handleSplashReady} />}
+                                <AppContent />
+                            </WalletProvider>
+                        </NetworkProvider>
+                    </ErrorBoundary>
+                </ThemeProvider>
             </QueryClientProvider>
         </WagmiProvider>
     );

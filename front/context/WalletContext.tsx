@@ -1,11 +1,11 @@
-// Wallet context — RainbowKit + wagmi (auto-detects all wallets)
+// Wallet context — wagmi only (no RainbowKit)
 import React, { createContext, useContext, ReactNode, useEffect, useState, useCallback, useRef } from 'react';
 import { BrowserProvider, ethers, Eip1193Provider } from 'ethers';
 import { getReadProvider } from '../lib/contracts';
 import { getActiveNetwork } from '../lib/networks';
 import { useNetwork } from './NetworkContext';
-import { useAccount, useDisconnect, useSwitchChain } from 'wagmi';
-import { useConnectModal } from '@rainbow-me/rainbowkit';
+import { useAccount, useDisconnect, useSwitchChain, useConnect } from 'wagmi';
+import { injected } from 'wagmi/connectors';
 
 // ── Interface ─────────────────────────────────────────────────────────────────
 
@@ -54,7 +54,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     const { address: wagmiAddress, isConnected: wagmiConnected, isConnecting: wagmiConnecting, chainId: wagmiChainId, connector } = useAccount();
     const { disconnect: wagmiDisconnect } = useDisconnect();
     const { switchChainAsync } = useSwitchChain();
-    const { openConnectModal } = useConnectModal();
+    const { connectAsync } = useConnect();
 
     // ── Local state ────────────────────────────────────────────────────────────
     const [walletProvider, setWalletProvider] = useState<Eip1193Provider | null>(null);
@@ -123,11 +123,18 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         if (address) updateBalance(address);
     }, [address, updateBalance]);
 
-    // ── Connect via RainbowKit modal ──────────────────────────────────────────
-    const connect = useCallback(() => {
+    // ── Connect — uses injected wallet (MetaMask, Rabby, etc.) ────────────────
+    const connect = useCallback(async () => {
         setError(null);
-        openConnectModal?.();
-    }, [openConnectModal]);
+        try {
+            await connectAsync({ connector: injected() });
+        } catch (e: any) {
+            const msg = e?.message || 'Failed to connect';
+            if (!msg.includes('rejected')) {
+                setError(msg);
+            }
+        }
+    }, [connectAsync]);
 
     // ── Disconnect ─────────────────────────────────────────────────────────────
     const disconnect = useCallback(async () => {
@@ -145,12 +152,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         }
     }, [switchChainAsync]);
 
-    // ── getSigner — gets ethers.js Signer from the connected wallet ──────────
+    // ── getSigner ──────────────────────────────────────────────────────────────
     const getSigner = useCallback(async (): Promise<ethers.Signer | null> => {
-        // Try current state first
         let eip1193 = providerRef.current || walletProvider;
 
-        // If not available, try to get it from connector directly
         if (!eip1193 && connector) {
             try {
                 eip1193 = await connector.getProvider() as any;
@@ -162,10 +167,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         if (!eip1193) return null;
 
         try {
-            const browserProvider = new BrowserProvider(eip1193 as any);
-            return await browserProvider.getSigner();
+            return await new BrowserProvider(eip1193 as any).getSigner();
         } catch {
-            // Retry once after short delay (connector may be initializing)
             await new Promise(r => setTimeout(r, 500));
             try {
                 const p = connector ? await connector.getProvider() as any : eip1193;

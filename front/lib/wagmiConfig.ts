@@ -1,4 +1,4 @@
-// Wagmi config for Sepolia — injected wallets only (no WalletConnect)
+// Wagmi config for Sepolia — injected wallets only
 import { createConfig, http, fallback } from 'wagmi';
 import { sepolia } from 'wagmi/chains';
 import { injected, coinbaseWallet } from 'wagmi/connectors';
@@ -6,7 +6,7 @@ import { injected, coinbaseWallet } from 'wagmi/connectors';
 export const wagmiConfig = createConfig({
     chains: [sepolia],
     connectors: [
-        injected(),              // MetaMask, Rabby, Brave, Backpack, etc.
+        injected(),
         coinbaseWallet({ appName: 'AttentionX' }),
     ],
     transports: {
