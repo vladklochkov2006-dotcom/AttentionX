@@ -1,13 +1,13 @@
 #!/bin/bash
 # AttentionX — Daily database backup
-# Runs via cron: 0 3 * * * /opt/attentionx/deploy/backup-db.sh
+# Runs via cron: 0 3 * * * /root/AttentionX/deploy/backup-db.sh
 
 set -euo pipefail
 
-BACKUP_DIR="/opt/attentionx/backups"
+BACKUP_DIR="/root/AttentionX/backups"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 KEEP_DAYS=30
-LOG_FILE="/opt/attentionx/logs/backup.log"
+LOG_FILE="/root/AttentionX/logs/backup.log"
 
 log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$LOG_FILE"
@@ -43,8 +43,8 @@ backup_db() {
     log "OK: ${PREFIX} backup created ${BACKUP_FILE}.gz (original: ${ORIG_SIZE}B, compressed: ${COMPRESSED_SIZE}B)"
 }
 
-# Backup RISE DB
-backup_db "/opt/attentionx/server/db/attentionx.db" "attentionx"
+# Backup DB
+backup_db "/root/AttentionX/server/db/attentionx.db" "attentionx"
 
 # Delete old backups (older than KEEP_DAYS)
 DELETED=$(find "$BACKUP_DIR" -name "attentionx*.db.gz" -mtime +${KEEP_DAYS} -delete -print | wc -l)

@@ -43,10 +43,10 @@ check_service() {
     fi
 }
 
-# Check RISE services
+# Check services
 check_service "API" "http://127.0.0.1:3007/health" "attentionx-api"
 check_service "Metadata" "http://127.0.0.1:3006/metadata/1" "attentionx-metadata"
-check_service "TokenLeagues" "http://127.0.0.1:3007/api/token-leagues/cycle/active" "attentionx-api"
+
 
 # Check nginx
 if ! systemctl is-active --quiet nginx; then

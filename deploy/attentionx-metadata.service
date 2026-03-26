@@ -1,5 +1,5 @@
 [Unit]
-Description=AttentionX RISE Metadata Server (port 3006)
+Description=AttentionX Metadata Server (port 3006)
 After=network.target
 Wants=network-online.target
 

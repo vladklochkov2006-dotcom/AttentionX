@@ -210,24 +210,11 @@ META_OK=$(systemctl is-active attentionx-metadata)
 NGINX_OK=$(systemctl is-active nginx)
 
 echo ""
-echo -e "  ${CYAN}RISE Testnet:${NC}"
+echo -e "  ${CYAN}Sepolia FHE:${NC}"
 echo -e "  attentionx-api:              ${API_OK} $([ "$API_OK" = "active" ] && echo "${GREEN}OK${NC}" || echo "${RED}FAIL${NC}")"
 echo -e "  attentionx-metadata:         ${META_OK} $([ "$META_OK" = "active" ] && echo "${GREEN}OK${NC}" || echo "${RED}FAIL${NC}")"
 echo -e "  ${CYAN}Infra:${NC}"
 echo -e "  nginx:                      ${NGINX_OK} $([ "$NGINX_OK" = "active" ] && echo "${GREEN}OK${NC}" || echo "${RED}FAIL${NC}")"
-
-# ─── Token Leagues quick check (retry — CycleManager starts async) ───
-echo -e "  ${CYAN}Token Leagues:${NC}"
-TL_OK="FAIL"
-for _tl_try in 1 2 3; do
-    TL_STATUS=$(curl -s --max-time 5 "http://127.0.0.1:3007/api/token-leagues/cycle/active" 2>/dev/null)
-    TL_OK=$(echo "$TL_STATUS" | node -e "process.stdin.on('data',d=>{try{const j=JSON.parse(d);console.log(j.success?'OK':'FAIL')}catch{console.log('FAIL')}})" 2>/dev/null || echo "FAIL")
-    [ "$TL_OK" = "OK" ] && break
-    sleep 3
-done
-TL_CYCLE=$(echo "$TL_STATUS" | node -e "process.stdin.on('data',d=>{try{const j=JSON.parse(d);console.log(j.data?.id||j.data?.cycle?.id||'?')}catch{console.log('?')}})" 2>/dev/null || echo "?")
-echo -e "  cycle API:                   $([ "$TL_OK" = "OK" ] && echo "${GREEN}OK${NC} (cycle #${TL_CYCLE})" || echo "${RED}FAIL${NC}")"
-echo -e "  WebSocket:                   wss://fhe.attnx.fun/ws/token-leagues"
 
 # ─── Verify metadata server uses correct contract ───
 echo -e "  ${CYAN}Contract verification:${NC}"
@@ -238,9 +225,9 @@ if [ -f "$DEPLOY_FILE" ]; then
     ACTUAL_ADDR=$(curl -s --max-time 5 "http://127.0.0.1:3006/" 2>/dev/null | node -e "process.stdin.on('data',d=>{try{console.log(JSON.parse(d).contract)}catch{console.log('?')}})" 2>/dev/null || echo "?")
 
     if [ "$ACTUAL_ADDR" = "$EXPECTED_ADDR" ]; then
-        echo -e "  RISE metadata:       ${GREEN}OK${NC} (${ACTUAL_ADDR})"
+        echo -e "  Metadata contract:       ${GREEN}OK${NC} (${ACTUAL_ADDR})"
     else
-        echo -e "  RISE metadata:       ${RED}MISMATCH${NC}"
+        echo -e "  Metadata contract:       ${RED}MISMATCH${NC}"
         echo -e "    expected: ${EXPECTED_ADDR}"
         echo -e "    actual:   ${ACTUAL_ADDR}"
         warn "Metadata server using wrong contract! Check deployment-cofhe.json"

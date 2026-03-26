@@ -1,18 +1,18 @@
 {
   "name": "attentionx-contracts",
   "version": "1.0.0",
-  "description": "AttentionX NFT Smart Contracts for RISE blockchain",
+  "description": "AttentionX NFT Smart Contracts for Sepolia FHE",
   "main": "scripts/deploy.js",
   "scripts": {
     "install:solc": "npm install -g solc",
     "compile": "node scripts/compile.js",
-    "deploy:rise": "node scripts/deploy.js rise",
+    "deploy:sepolia": "node scripts/deploy.js rise",
     "clean": "rimraf build"
   },
   "keywords": [
     "nft",
     "solidity",
-    "rise",
+    "sepolia",
     "attentionx",
     "yc"
   ],
