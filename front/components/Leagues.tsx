@@ -1026,6 +1026,8 @@ const Leagues: React.FC = () => {
                                 <CheckCircle className="w-5 h-5 mr-2" /> You're registered for this tournament
                             </span>
                         </div>
+                    ) : phase === 'reveal' ? (
+                        <span className="text-cyan-500 dark:text-cyan-400 font-bold">Reveal phase — reveal your lineup to confirm entry</span>
                     ) : (phase === 'registration' || phase === 'active') ? (
                         <button
                             onClick={() => setIsJoining(true)}
@@ -1036,7 +1038,7 @@ const Leagues: React.FC = () => {
                     ) : phase === 'upcoming' ? (
                         <span className="text-cyan-500 dark:text-cyan-400 font-bold">Registration opens soon</span>
                     ) : phase === 'ended' ? (
-                        <span className="text-gray-500 font-bold">Tournament ended - awaiting finalization</span>
+                        <span className="text-gray-500 font-bold">Tournament ended — awaiting finalization</span>
                     ) : (
                         <span className="text-gray-500 dark:text-gray-500 font-bold">Tournament ended</span>
                     )}

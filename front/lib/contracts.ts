@@ -254,9 +254,13 @@ export const STARTUPS: Record<number, { name: string; rarity: string; multiplier
 // ============ Provider ============
 export function getProvider() {
     if (typeof window !== 'undefined' && window.ethereum) {
-        return new ethers.BrowserProvider(window.ethereum);
+        try {
+            return new ethers.BrowserProvider(window.ethereum);
+        } catch {
+            // Fallback if wallet extension is not ready
+        }
     }
-    return new ethers.JsonRpcProvider(getActiveNetwork().rpcUrl);
+    return getReadProvider();
 }
 
 // Read-only provider with multi-RPC fallback to avoid 429 rate limits

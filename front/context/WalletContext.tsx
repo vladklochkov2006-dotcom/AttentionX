@@ -72,7 +72,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
     // ── Sync EIP-1193 provider from wagmi connector ────────────────────────────
     useEffect(() => {
-        if (!connector || !wagmiConnected) {
+        if (!connector || !wagmiConnected || typeof connector.getProvider !== 'function') {
             setWalletProvider(null);
             providerRef.current = null;
             return;
@@ -156,7 +156,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     const getSigner = useCallback(async (): Promise<ethers.Signer | null> => {
         let eip1193 = providerRef.current || walletProvider;
 
-        if (!eip1193 && connector) {
+        if (!eip1193 && connector && typeof connector.getProvider === 'function') {
             try {
                 eip1193 = await connector.getProvider() as any;
             } catch {
@@ -171,7 +171,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         } catch {
             await new Promise(r => setTimeout(r, 500));
             try {
-                const p = connector ? await connector.getProvider() as any : eip1193;
+                const p = (connector && typeof connector.getProvider === 'function')
+                    ? await connector.getProvider() as any
+                    : eip1193;
                 return await new BrowserProvider(p).getSigner();
             } catch {
                 return null;
