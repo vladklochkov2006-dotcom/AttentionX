@@ -98,7 +98,7 @@ npm ci --production --silent 2>&1 | tail -3 || npm install --production --silent
 # ─── Build frontend ───
 log "Building frontend..."
 cd "${APP_DIR}/front"
-npm ci --silent 2>&1 | tail -3 || npm install --silent 2>&1 | tail -3
+npm install 2>&1 | tail -5
 npm run build
 
 # Verify build output exists
