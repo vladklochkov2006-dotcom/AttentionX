@@ -98,6 +98,7 @@ npm ci --production --silent 2>&1 | tail -3 || npm install --production --silent
 # ─── Build frontend ───
 log "Building frontend..."
 cd "${APP_DIR}/front"
+rm -f package-lock.json
 npm install --legacy-peer-deps 2>&1 | tail -5
 npm run build
 
