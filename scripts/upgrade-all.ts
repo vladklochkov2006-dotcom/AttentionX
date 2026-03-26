@@ -9,13 +9,19 @@ async function upgradeContract(name: string, proxyAddress: string) {
     console.log(`  Proxy: ${proxyAddress}`);
 
     const Factory = await ethers.getContractFactory(name);
-    const newImpl = await Factory.deploy();
+
+    // Get current gas price and add 50% buffer to avoid "underpriced"
+    const feeData = await ethers.provider.getFeeData();
+    const gasPrice = (feeData.gasPrice || 0n) * 150n / 100n;
+    console.log(`  Gas price: ${ethers.formatUnits(gasPrice, 'gwei')} gwei`);
+
+    const newImpl = await Factory.deploy({ gasPrice });
     await newImpl.waitForDeployment();
     const newImplAddress = await newImpl.getAddress();
     console.log(`  New implementation: ${newImplAddress}`);
 
     const proxy = Factory.attach(proxyAddress);
-    const tx = await proxy.upgradeToAndCall(newImplAddress, "0x");
+    const tx = await proxy.upgradeToAndCall(newImplAddress, "0x", { gasPrice });
     await tx.wait();
     console.log(`  ✓ ${name} upgraded`);
 
@@ -25,6 +31,9 @@ async function upgradeContract(name: string, proxyAddress: string) {
 async function main() {
     const [deployer] = await ethers.getSigners();
     console.log("Deployer:", deployer.address);
+
+    const balance = await ethers.provider.getBalance(deployer.address);
+    console.log("Balance:", ethers.formatEther(balance), "ETH");
 
     const deployment = JSON.parse(fs.readFileSync("deployment-cofhe.json", "utf8"));
 
@@ -51,6 +60,16 @@ async function main() {
         deployment.contracts.TournamentManagerFHE.implementation = newFheImpl;
     }
     fs.writeFileSync("deployment-cofhe.json", JSON.stringify(deployment, null, 2));
+
+    // Also set pack price to 0.01 ETH
+    console.log("\n── Setting pack price to 0.01 ETH ──");
+    const PackOpener = await ethers.getContractFactory("PackOpener");
+    const feeData = await ethers.provider.getFeeData();
+    const gasPrice = (feeData.gasPrice || 0n) * 150n / 100n;
+    const packOpener = PackOpener.attach(deployment.contracts.PackOpener);
+    const priceTx = await packOpener.setPackPrice(ethers.parseEther("0.01"), { gasPrice });
+    await priceTx.wait();
+    console.log("  ✓ Pack price set to 0.01 ETH");
 
     console.log("\n✓ All contracts upgraded with THIRD_ADMIN support!");
     console.log("  THIRD_ADMIN: 0x233c8C54F25734B744E522bdC1Eed9cbc8C97D0c");
