@@ -1,0 +1,21 @@
+{
+  "network": "eth-sepolia",
+  "chainId": 11155111,
+  "timestamp": "2026-03-23T12:15:36.909Z",
+  "deployer": "0xd5C9B9a6E16112B8985280c07462E3b358C3844F",
+  "contracts": {
+    "AttentionX_NFT": "0x409384AF735AAe5AD58cE4dc70c9309E9f3E72aF",
+    "PackNFT": "0xe8BBC11b3CEFdC64D79af217f79497B7EAf34fa5",
+    "PackOpener": "0xB6F73D5172425B734E020073A80A44d8B22FfA39",
+    "MarketplaceV2": "0x8C64e6380561496B278AC7Ab6f35AFf9aB88160C",
+    "TokenLeagues": "0x02c8d70d8B19a6aFf8aebf3Ea9724000a3e3E54F",
+    "TournamentManager": "0x1B0e40BbB6b436866cf64882DBcECb01F5207f81",
+    "TournamentManagerFHE": {
+      "proxy": "0x1B0e40BbB6b436866cf64882DBcECb01F5207f81",
+      "implementation": "0x7e2921Dc1617cc6e4389dB046982D17F09eEaE89"
+    },
+    "DarkLeaderboard": "0xf08e22e350026c670D86ef0A794064e9D301d5eE",
+    "EncryptedCardStats": "0x412bE266fA5e3f78Af950bb96860D839699d3822",
+    "SealedBidMarketplace": "0x1bA2BA3B00096924dDf2fE18b328387beafaBF5E"
+  }
+}

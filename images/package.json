@@ -1,0 +1,29 @@
+{
+  "name": "attentionx-contracts",
+  "version": "1.0.0",
+  "description": "AttentionX NFT Smart Contracts for RISE blockchain",
+  "main": "scripts/deploy.js",
+  "scripts": {
+    "install:solc": "npm install -g solc",
+    "compile": "node scripts/compile.js",
+    "deploy:rise": "node scripts/deploy.js rise",
+    "clean": "rimraf build"
+  },
+  "keywords": [
+    "nft",
+    "solidity",
+    "rise",
+    "attentionx",
+    "yc"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@openzeppelin/contracts": "^5.0.0",
+    "ethers": "^6.9.0"
+  },
+  "devDependencies": {
+    "rimraf": "^5.0.5",
+    "solc": "^0.8.20"
+  }
+}

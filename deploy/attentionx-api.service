@@ -1,0 +1,36 @@
+[Unit]
+Description=AttentionX API Server (Express.js on port 3007)
+Documentation=https://github.com/attentionx/attentionx
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=attentionx
+Group=attentionx
+WorkingDirectory=/opt/attentionx/server
+ExecStart=/usr/bin/node index.js
+EnvironmentFile=/opt/attentionx/.env
+Environment=NODE_ENV=production
+Environment=PORT=3007
+
+# Restart policy
+Restart=always
+RestartSec=5
+StartLimitBurst=5
+StartLimitIntervalSec=60
+
+# Graceful shutdown (gives sql.js time to save DB)
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+# Security
+NoNewPrivileges=true
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=attentionx-api
+
+[Install]
+WantedBy=multi-user.target

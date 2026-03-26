@@ -1,0 +1,26 @@
+{
+  "name": "AttentionX",
+  "short_name": "AttentionX",
+  "description": "Fantasy league for YC startups. Collect NFT cards, build your deck, compete in tournaments.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#050505",
+  "theme_color": "#9333EA",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/attentionx.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/attentionx.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "categories": ["games", "entertainment"],
+  "lang": "en"
+}
