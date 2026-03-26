@@ -1,10 +1,12 @@
-// Wagmi config for Sepolia (CoFHE)
-import { createConfig, http } from 'wagmi';
+// Wagmi + RainbowKit config for Sepolia (CoFHE)
+import { getDefaultConfig } from '@rainbow-me/rainbowkit';
 import { sepolia } from 'wagmi/chains';
 
-export const wagmiConfig = createConfig({
+// WalletConnect projectId — get one free at https://cloud.walletconnect.com
+const projectId = import.meta.env.VITE_WALLETCONNECT_PROJECT_ID || '0b0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e';
+
+export const wagmiConfig = getDefaultConfig({
+    appName: 'AttentionX',
+    projectId,
     chains: [sepolia],
-    transports: {
-        [sepolia.id]: http('https://sepolia.infura.io/v3/36f488b5117446bcbc2fc26e4658405b'),
-    },
 });

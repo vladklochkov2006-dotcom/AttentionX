@@ -133,15 +133,9 @@ const Sidebar: React.FC<SidebarProps> = ({ activeSection, setActiveSection, user
             </div>
           </>
         ) : (
-          /* Not connected: Privy wallet */
+          /* Not connected */
           <>
-            {/* Powered by Privy — above connect button */}
-            <p className="text-center text-[10px] text-gray-400 dark:text-gray-600 font-medium tracking-wide">
-              Powered by{' '}
-              <span className="text-gray-500 dark:text-gray-500 font-semibold">Privy</span>
-            </p>
-
-            {/* Connect Wallet (opens Privy modal) */}
+            {/* Connect Wallet */}
             <button
               onClick={connect}
               disabled={isConnecting}

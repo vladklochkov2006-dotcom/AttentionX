@@ -28,24 +28,11 @@ import { useTheme } from './context/ThemeContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { WalletProvider, useWalletContext } from './context/WalletContext';
 import { NetworkProvider, useNetwork } from './context/NetworkContext';
-import { PrivyProvider } from '@privy-io/react-auth';
+import { RainbowKitProvider, darkTheme } from '@rainbow-me/rainbowkit';
+import '@rainbow-me/rainbowkit/styles.css';
 import { WagmiProvider } from 'wagmi';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { wagmiConfig } from './lib/wagmiConfig';
-import { defineChain } from 'viem';
-
-// Chain definition for Privy
-const sepoliaChain = defineChain({
-    id: 11155111,
-    name: 'Ethereum Sepolia (CoFHE)',
-    nativeCurrency: { name: 'Sepolia ETH', symbol: 'ETH', decimals: 18 },
-    rpcUrls: {
-        default: { http: ['https://sepolia.infura.io/v3/36f488b5117446bcbc2fc26e4658405b'] },
-    },
-    blockExplorers: {
-        default: { name: 'Etherscan', url: 'https://sepolia.etherscan.io' },
-    },
-});
 import { formatXTZ } from './lib/contracts';
 import { currencySymbol } from './lib/networks';
 import { isAdmin } from './hooks/useAdmin';
@@ -539,7 +526,7 @@ const AppContent: React.FC = () => {
                                             {/* Connect / Switch */}
                                             {!isConnected ? (
                                                 <div className="space-y-2">
-                                                    {/* Connect Wallet via Privy */}
+                                                    {/* Connect Wallet */}
                                                     <button
                                                         onClick={() => { setIsMobileMenuOpen(false); connect(); }}
                                                         className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-yc-purple text-white font-bold text-sm active:scale-95 transition-transform hover:bg-yc-purple/80"
@@ -688,30 +675,7 @@ const App: React.FC = () => {
     return (
         <WagmiProvider config={wagmiConfig}>
             <QueryClientProvider client={queryClient}>
-                {import.meta.env.VITE_PRIVY_APP_ID ? (
-                <PrivyProvider
-                    appId={import.meta.env.VITE_PRIVY_APP_ID as string}
-                    config={{
-                        supportedChains: [sepoliaChain],
-                        defaultChain: sepoliaChain,
-                        loginMethods: ['email', 'google', 'discord', 'wallet'],
-                        embeddedWallets: {
-                            ethereum: { createOnLogin: 'users-without-wallets' },
-                        },
-                        appearance: {
-                            theme: 'dark',
-                            accentColor: '#06B6D4',
-                            showWalletLoginFirst: false,
-                            landingHeader: 'Welcome to AttentionX',
-                            loginMessage: 'Connect your wallet or sign in to play',
-                            walletChainType: 'ethereum-only',
-                            walletList: [
-                                'detected_ethereum_wallets',
-                                'wallet_connect',
-                            ],
-                        },
-                    }}
-                >
+                <RainbowKitProvider theme={darkTheme({ accentColor: '#06B6D4', borderRadius: 'medium' })}>
                     <ThemeProvider>
                         <ErrorBoundary>
                             <NetworkProvider>
@@ -722,19 +686,7 @@ const App: React.FC = () => {
                             </NetworkProvider>
                         </ErrorBoundary>
                     </ThemeProvider>
-                </PrivyProvider>
-                ) : (
-                    <ThemeProvider>
-                        <ErrorBoundary>
-                            <NetworkProvider>
-                                <WalletProvider>
-                                    {showSplash && <SplashScreen onReady={handleSplashReady} />}
-                                    <AppContent />
-                                </WalletProvider>
-                            </NetworkProvider>
-                        </ErrorBoundary>
-                    </ThemeProvider>
-                )}
+                </RainbowKitProvider>
             </QueryClientProvider>
         </WagmiProvider>
     );

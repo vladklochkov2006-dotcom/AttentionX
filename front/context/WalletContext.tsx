@@ -1,10 +1,11 @@
-// Wallet context — Privy wallet only (Fhenix CoFHE on Sepolia)
-import React, { createContext, useContext, ReactNode, useEffect, useState, useCallback, useRef } from 'react';
+// Wallet context — RainbowKit + wagmi (auto-detects all wallets)
+import React, { createContext, useContext, ReactNode, useEffect, useState, useCallback } from 'react';
 import { BrowserProvider, ethers, Eip1193Provider } from 'ethers';
 import { getReadProvider } from '../lib/contracts';
 import { getActiveNetwork } from '../lib/networks';
 import { useNetwork } from './NetworkContext';
-import { usePrivy, useWallets } from '@privy-io/react-auth';
+import { useAccount, useDisconnect, useSwitchChain, useConnectorClient } from 'wagmi';
+import { useConnectModal } from '@rainbow-me/rainbowkit';
 
 // ── Interface ─────────────────────────────────────────────────────────────────
 
@@ -44,78 +45,41 @@ function formatBalance(wei: bigint, decimals = 4): string {
     });
 }
 
-function parseCaip2ChainId(caip2: string | undefined): number | null {
-    if (!caip2) return null;
-    const parts = caip2.split(':');
-    const n = parseInt(parts[parts.length - 1]);
-    return isNaN(n) ? null : n;
-}
-
 // ── Provider ──────────────────────────────────────────────────────────────────
 
 export function WalletProvider({ children }: { children: ReactNode }) {
     const { activeNetwork } = useNetwork();
 
-    // ── Privy state ───────────────────────────────────────────────────────────
-    const { ready, authenticated: privyAuthenticated, login, logout: privyLogout } = usePrivy();
-    const { wallets } = useWallets();
-    const privyWallet = wallets[0] ?? null;
+    // ── wagmi state ────────────────────────────────────────────────────────────
+    const { address: wagmiAddress, isConnected: wagmiConnected, isConnecting: wagmiConnecting, chainId: wagmiChainId } = useAccount();
+    const { disconnect: wagmiDisconnect } = useDisconnect();
+    const { switchChainAsync } = useSwitchChain();
+    const { openConnectModal } = useConnectModal();
+    const { data: connectorClient } = useConnectorClient();
 
-    // ── Local state ───────────────────────────────────────────────────────────
+    // ── Local state ────────────────────────────────────────────────────────────
     const [walletProvider, setWalletProvider] = useState<Eip1193Provider | null>(null);
-    const [privyChainId, setPrivyChainId] = useState<number | null>(null);
     const [balance, setBalance] = useState<bigint>(0n);
     const [balanceLoading, setBalanceLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    const chainListenerRef = useRef<((hex: string) => void) | null>(null);
-    const prevProviderRef = useRef<any>(null);
-
-    // ── Derived state ─────────────────────────────────────────────────────────
-    const address: string | null = privyWallet?.address ?? null;
-    const isConnected = privyAuthenticated && !!privyWallet;
-    const isConnecting = !ready;
-    const chainId = privyChainId;
+    // ── Derived state ──────────────────────────────────────────────────────────
+    const address: string | null = wagmiAddress ?? null;
+    const isConnected = wagmiConnected;
+    const isConnecting = wagmiConnecting;
+    const chainId = wagmiChainId ?? null;
     const isCorrectChain = chainId === activeNetwork.chainId;
 
-    // ── Privy: sync EIP-1193 provider ─────────────────────────────────────────
+    // ── Sync EIP-1193 provider from wagmi connector ────────────────────────────
     useEffect(() => {
-        if (!privyWallet) {
-            if (prevProviderRef.current && chainListenerRef.current) {
-                prevProviderRef.current.removeListener?.('chainChanged', chainListenerRef.current);
-            }
+        if (connectorClient?.transport) {
+            setWalletProvider(connectorClient.transport as unknown as Eip1193Provider);
+        } else {
             setWalletProvider(null);
-            setPrivyChainId(null);
-            return;
         }
+    }, [connectorClient]);
 
-        let cancelled = false;
-
-        privyWallet.getEthereumProvider().then(eip1193 => {
-            if (cancelled) return;
-
-            if (prevProviderRef.current && chainListenerRef.current) {
-                prevProviderRef.current.removeListener?.('chainChanged', chainListenerRef.current);
-            }
-
-            setPrivyChainId(parseCaip2ChainId(privyWallet.chainId));
-
-            const onChain = (hex: string) => {
-                setPrivyChainId(parseInt(typeof hex === 'string' ? hex : String(hex), 16));
-            };
-            eip1193.on?.('chainChanged', onChain);
-            chainListenerRef.current = onChain;
-            prevProviderRef.current = eip1193;
-
-            setWalletProvider(eip1193 as Eip1193Provider);
-        }).catch(() => {
-            if (!cancelled) setWalletProvider(null);
-        });
-
-        return () => { cancelled = true; };
-    }, [privyWallet?.address]);
-
-    // ── Balance polling ───────────────────────────────────────────────────────
+    // ── Balance polling ────────────────────────────────────────────────────────
     const updateBalance = useCallback(async (addr: string) => {
         try {
             const provider = getReadProvider();
@@ -145,80 +109,50 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         if (address) updateBalance(address);
     }, [address, updateBalance]);
 
-    // ── Connect via Privy ─────────────────────────────────────────────────────
+    // ── Connect via RainbowKit modal ──────────────────────────────────────────
     const connect = useCallback(() => {
         setError(null);
-        login();
-    }, [login]);
+        openConnectModal?.();
+    }, [openConnectModal]);
 
-    // ── Disconnect ────────────────────────────────────────────────────────────
+    // ── Disconnect ─────────────────────────────────────────────────────────────
     const disconnect = useCallback(async () => {
         setError(null);
-        if (privyAuthenticated) await privyLogout();
-    }, [privyAuthenticated, privyLogout]);
+        wagmiDisconnect();
+    }, [wagmiDisconnect]);
 
-    // ── Switch chain ──────────────────────────────────────────────────────────
+    // ── Switch chain ───────────────────────────────────────────────────────────
     const switchChain = useCallback(async () => {
         const net = getActiveNetwork();
-
-        if (!privyWallet) return;
         try {
-            await privyWallet.switchChain(net.chainId);
-            setPrivyChainId(net.chainId);
+            await switchChainAsync({ chainId: net.chainId });
         } catch {
-            const eip1193 = walletProvider;
-            if (!eip1193) return;
-            const hexChainId = '0x' + net.chainId.toString(16);
-            try {
-                await eip1193.request({
-                    method: 'wallet_addEthereumChain',
-                    params: [{
-                        chainId: hexChainId,
-                        chainName: net.name,
-                        nativeCurrency: net.nativeCurrency,
-                        rpcUrls: [net.rpcUrl],
-                        blockExplorerUrls: [net.explorerUrl],
-                    }],
-                });
-                await privyWallet.switchChain(net.chainId);
-                setPrivyChainId(net.chainId);
-            } catch { /* user rejected */ }
+            // user rejected or chain not supported
         }
-    }, [privyWallet, walletProvider]);
+    }, [switchChainAsync]);
 
-    // ── signMessage ───────────────────────────────────────────────────────────
+    // ── signMessage ────────────────────────────────────────────────────────────
     const signMessage = useCallback(async (message: string): Promise<string | null> => {
-        if (!privyWallet) return null;
+        if (!walletProvider) return null;
         try {
-            const eip1193 = await privyWallet.getEthereumProvider();
-            const signer = await new BrowserProvider(eip1193 as any).getSigner();
+            const signer = await new BrowserProvider(walletProvider as any).getSigner();
             return await signer.signMessage(message);
         } catch {
             return null;
         }
-    }, [privyWallet]);
+    }, [walletProvider]);
 
-    // ── getSigner (with retry — provider may lag behind isConnected) ─────────
-    const getSignerOnce = useCallback(async (): Promise<ethers.Signer | null> => {
-        if (!privyWallet) return null;
+    // ── getSigner ──────────────────────────────────────────────────────────────
+    const getSigner = useCallback(async (): Promise<ethers.Signer | null> => {
+        if (!walletProvider) return null;
         try {
-            const eip1193 = await privyWallet.getEthereumProvider();
-            return await new BrowserProvider(eip1193 as any).getSigner();
+            return await new BrowserProvider(walletProvider as any).getSigner();
         } catch {
             return null;
         }
-    }, [privyWallet]);
+    }, [walletProvider]);
 
-    const getSigner = useCallback(async (): Promise<ethers.Signer | null> => {
-        // First attempt
-        const signer = await getSignerOnce();
-        if (signer) return signer;
-        // Provider may not be ready yet (Privy async init) — retry after short delay
-        await new Promise(r => setTimeout(r, 600));
-        return getSignerOnce();
-    }, [getSignerOnce]);
-
-    // ── Context value ─────────────────────────────────────────────────────────
+    // ── Context value ──────────────────────────────────────────────────────────
     const value: WalletContextType = {
         isConnected,
         address,
