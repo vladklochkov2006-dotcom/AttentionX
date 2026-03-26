@@ -9,6 +9,7 @@ export default defineConfig(({ mode }) => {
         port: 3005,
         host: '0.0.0.0',
         hmr: false,
+        allowedHosts: ['fhe.attnx.fun', 'localhost'],
         proxy: {
           '/api': {
             target: 'http://localhost:3007',

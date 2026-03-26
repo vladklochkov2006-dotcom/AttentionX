@@ -18,7 +18,7 @@
 set -euo pipefail
 
 APP_DIR="/opt/attentionx"
-REPO="https://github.com/egorble/attentionx"
+REPO="https://github.com/vladklochkov2006-dotcom/AttentionX.git"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -103,11 +103,11 @@ npm run build
 log "Frontend built"
 
 # ─── Contract addresses ───
-# No .env sync needed — metadata server reads directly from deployment-rise.json
+# No .env sync needed — metadata server reads directly from deployment-cofhe.json
 log "Contract addresses from deployment file (no .env sync needed):"
-if [ -f "${APP_DIR}/deployment-rise.json" ]; then
-    ADDR=$(node -e "console.log(JSON.parse(require('fs').readFileSync('${APP_DIR}/deployment-rise.json','utf8')).proxies.AttentionX_NFT || 'N/A')" 2>/dev/null || echo "N/A")
-    log "  deployment-rise.json: ${ADDR}"
+if [ -f "${APP_DIR}/deployment-cofhe.json" ]; then
+    ADDR=$(node -e "console.log(JSON.parse(require('fs').readFileSync('${APP_DIR}/deployment-cofhe.json','utf8')).proxies.AttentionX_NFT || 'N/A')" 2>/dev/null || echo "N/A")
+    log "  deployment-cofhe.json: ${ADDR}"
 fi
 
 # ─── Ensure data directories exist ───
@@ -144,7 +144,7 @@ systemctl start attentionx-metadata
 # ─── Reload nginx config (picks up burst/rate limit changes) ───
 if [ -f "${APP_DIR}/deploy/nginx.conf" ]; then
     log "Updating nginx config..."
-    DOMAIN="app.attnx.fun"
+    DOMAIN="fhe.attnx.fun"
     NGINX_TARGET="/etc/nginx/sites-available/${DOMAIN}"
 
     # Clean up old 'attentionx' config that conflicts with the canonical name
@@ -190,12 +190,12 @@ for _tl_try in 1 2 3; do
 done
 TL_CYCLE=$(echo "$TL_STATUS" | node -e "process.stdin.on('data',d=>{try{const j=JSON.parse(d);console.log(j.data?.id||j.data?.cycle?.id||'?')}catch{console.log('?')}})" 2>/dev/null || echo "?")
 echo -e "  cycle API:                   $([ "$TL_OK" = "OK" ] && echo "${GREEN}OK${NC} (cycle #${TL_CYCLE})" || echo "${RED}FAIL${NC}")"
-echo -e "  WebSocket:                   wss://app.attnx.fun/ws/token-leagues"
+echo -e "  WebSocket:                   wss://fhe.attnx.fun/ws/token-leagues"
 
 # ─── Verify metadata server uses correct contract ───
 echo -e "  ${CYAN}Contract verification:${NC}"
 
-DEPLOY_FILE="${APP_DIR}/deployment-rise.json"
+DEPLOY_FILE="${APP_DIR}/deployment-cofhe.json"
 if [ -f "$DEPLOY_FILE" ]; then
     EXPECTED_ADDR=$(node -e "console.log(JSON.parse(require('fs').readFileSync('${DEPLOY_FILE}','utf8')).proxies.AttentionX_NFT || '')" 2>/dev/null || echo "")
     ACTUAL_ADDR=$(curl -s --max-time 5 "http://127.0.0.1:3006/" 2>/dev/null | node -e "process.stdin.on('data',d=>{try{console.log(JSON.parse(d).contract)}catch{console.log('?')}})" 2>/dev/null || echo "?")
@@ -206,7 +206,7 @@ if [ -f "$DEPLOY_FILE" ]; then
         echo -e "  RISE metadata:       ${RED}MISMATCH${NC}"
         echo -e "    expected: ${EXPECTED_ADDR}"
         echo -e "    actual:   ${ACTUAL_ADDR}"
-        warn "Metadata server using wrong contract! Check deployment-rise.json"
+        warn "Metadata server using wrong contract! Check deployment-cofhe.json"
     fi
 fi
 
