@@ -149,6 +149,19 @@ systemctl start attentionx-api
 systemctl start attentionx-metadata
 
 # ─── Nginx + SSL setup ───
+# Ensure nginx is installed and enabled
+if ! command -v nginx &>/dev/null; then
+    log "Installing nginx..."
+    apt-get update -qq && apt-get install -y -qq nginx
+fi
+systemctl enable nginx 2>/dev/null || true
+
+# Ensure certbot is installed
+if ! command -v certbot &>/dev/null; then
+    log "Installing certbot..."
+    apt-get update -qq && apt-get install -y -qq certbot python3-certbot-nginx
+fi
+
 DOMAIN="fhe.attnx.fun"
 NGINX_TARGET="/etc/nginx/sites-available/${DOMAIN}"
 CERT_PATH="/etc/letsencrypt/live/${DOMAIN}/fullchain.pem"
@@ -178,7 +191,17 @@ server {
 }
 TMPEOF
         ln -sf "$NGINX_TARGET" "/etc/nginx/sites-enabled/${DOMAIN}"
-        nginx -t 2>/dev/null && systemctl reload nginx
+        # Remove default config that may conflict
+        rm -f /etc/nginx/sites-enabled/default
+        if nginx -t 2>/dev/null; then
+            if systemctl is-active --quiet nginx; then
+                systemctl reload nginx
+            else
+                systemctl start nginx
+            fi
+        else
+            warn "Temp nginx config test failed"
+        fi
 
         # Obtain certificate
         certbot certonly --webroot -w /var/www/certbot -d "${DOMAIN}" --non-interactive --agree-tos --register-unsafely-without-email \
@@ -192,8 +215,12 @@ TMPEOF
         ln -sf "$NGINX_TARGET" "/etc/nginx/sites-enabled/${DOMAIN}"
 
         if nginx -t 2>/dev/null; then
-            systemctl reload nginx
-            log "Nginx reloaded with SSL"
+            if systemctl is-active --quiet nginx; then
+                systemctl reload nginx
+            else
+                systemctl start nginx
+            fi
+            log "Nginx running with SSL"
         else
             warn "Nginx config test failed — skipping reload"
         fi
