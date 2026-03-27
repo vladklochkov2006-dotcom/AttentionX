@@ -1,14 +1,9 @@
 /**
- * Private Tournament Registration
+ * Private Tournament Registration with TX Queue
  *
- * User signs a message off-chain → sends to server → server registers on-chain.
+ * User signs a message off-chain → sends to server → server queues and registers on-chain.
  * Cards are NEVER visible in user's transaction history.
- *
- * Flow:
- * 1. Frontend: user picks 5 cards, signs EIP-712 message
- * 2. Server: verifies signature, stores cards in private DB
- * 3. Server: calls adminRegisterPlayer(tournamentId, player, cardIds) on-chain
- * 4. Cards are locked on-chain but only visible in admin's tx (not user's)
+ * TX queue ensures nonce conflicts don't happen under concurrent load.
  */
 
 import { ethers } from 'ethers';
@@ -19,18 +14,104 @@ const TOURNAMENT_ABI = [
     'function hasEntered(uint256 tournamentId, address user) view returns (bool)',
 ];
 
-/**
- * Verify that the user signed the registration message
- */
+// ── TX Queue ──────────────────────────────────────────────────────────────────
+// Sequential queue — one tx at a time, managed nonce
+
+let _wallet = null;
+let _contract = null;
+let _nonce = null;
+const _queue = [];
+let _processing = false;
+
+function getContract() {
+    if (!_wallet) {
+        const provider = new ethers.JsonRpcProvider(CHAIN.RPC_URL);
+        _wallet = new ethers.Wallet(ADMIN_PRIVATE_KEY, provider);
+        _contract = new ethers.Contract(CONTRACTS.TournamentManager, TOURNAMENT_ABI, _wallet);
+    }
+    return _contract;
+}
+
+async function getNonce() {
+    if (_nonce === null) {
+        _nonce = await _wallet.getNonce();
+    }
+    return _nonce++;
+}
+
+// Reset nonce on error (re-sync with chain)
+async function resetNonce() {
+    _nonce = await _wallet.getNonce();
+}
+
+async function processQueue() {
+    if (_processing) return;
+    _processing = true;
+
+    while (_queue.length > 0) {
+        const job = _queue.shift();
+        try {
+            const result = await executeRegistration(job.tournamentId, job.address, job.cardIds);
+            job.resolve(result);
+        } catch (err) {
+            job.resolve({ success: false, error: err.message || 'Queue processing error' });
+        }
+    }
+
+    _processing = false;
+}
+
+async function executeRegistration(tournamentId, address, cardIds) {
+    const contract = getContract();
+
+    // Check if already entered (read — no nonce needed)
+    const alreadyEntered = await contract.hasEntered(tournamentId, address);
+    if (alreadyEntered) {
+        return { success: false, error: 'Already registered for this tournament' };
+    }
+
+    // Send tx with managed nonce
+    let retries = 2;
+    while (retries > 0) {
+        try {
+            const nonce = await getNonce();
+            const tx = await contract.adminRegisterPlayer(tournamentId, address, cardIds, { nonce });
+            const receipt = await tx.wait();
+
+            console.log(`[REG-QUEUE] ✓ ${address.substring(0, 10)}... → tournament #${tournamentId} (tx: ${tx.hash.substring(0, 14)}..., nonce: ${nonce})`);
+
+            return {
+                success: true,
+                txHash: tx.hash,
+                blockNumber: receipt.blockNumber,
+            };
+        } catch (err) {
+            const msg = err.message || '';
+            if (msg.includes('nonce') || msg.includes('replacement')) {
+                console.warn(`[REG-QUEUE] Nonce conflict, resetting... (${retries - 1} retries left)`);
+                await resetNonce();
+                retries--;
+                continue;
+            }
+            const reason = err.reason || msg;
+            console.error(`[REG-QUEUE] ✗ ${address.substring(0, 10)}...: ${reason.substring(0, 100)}`);
+            return { success: false, error: reason };
+        }
+    }
+
+    return { success: false, error: 'Registration failed after retries' };
+}
+
+// ── Public API ────────────────────────────────────────────────────────────────
+
 function verifyRegistrationSignature(address, tournamentId, cardIds, signature) {
-    // Message format: "AttentionX: Register for tournament {id} with cards [{ids}]"
     const message = `AttentionX: Register for tournament ${tournamentId} with cards [${cardIds.join(',')}]`;
     const recovered = ethers.verifyMessage(message, signature);
     return recovered.toLowerCase() === address.toLowerCase();
 }
 
 /**
- * Register a player privately via admin transaction
+ * Queue a private registration. Returns a promise that resolves when the tx is confirmed.
  */
 async function registerPlayerPrivately(address, tournamentId, cardIds, signature) {
     // 1. Verify signature
@@ -42,40 +123,20 @@ async function registerPlayerPrivately(address, tournamentId, cardIds, signature
         return { success: false, error: 'Server not configured for private registration' };
     }
 
-    // 2. Submit on-chain via admin
-    const provider = new ethers.JsonRpcProvider(CHAIN.RPC_URL);
-    const wallet = new ethers.Wallet(ADMIN_PRIVATE_KEY, provider);
-    const contract = new ethers.Contract(CONTRACTS.TournamentManager, TOURNAMENT_ABI, wallet);
-
-    // Check if already entered
-    const alreadyEntered = await contract.hasEntered(tournamentId, address);
-    if (alreadyEntered) {
-        return { success: false, error: 'Already registered for this tournament' };
-    }
-
-    try {
-        const tx = await contract.adminRegisterPlayer(tournamentId, address, cardIds);
-        const receipt = await tx.wait();
-
-        console.log(`[PRIVATE-REG] Registered ${address.substring(0, 10)}... for tournament #${tournamentId} (tx: ${tx.hash})`);
-
-        return {
-            success: true,
-            txHash: tx.hash,
-            blockNumber: receipt.blockNumber,
-        };
-    } catch (err) {
-        const reason = err.reason || err.message || 'Registration failed';
-        console.error(`[PRIVATE-REG] Failed for ${address.substring(0, 10)}...: ${reason}`);
-        return { success: false, error: reason };
-    }
+    // 2. Add to queue
+    return new Promise((resolve) => {
+        _queue.push({ tournamentId, address, cardIds, resolve });
+        console.log(`[REG-QUEUE] Queued ${address.substring(0, 10)}... (queue size: ${_queue.length})`);
+        processQueue();
+    });
 }
 
-/**
- * Build the message that the user needs to sign
- */
 function getRegistrationMessage(tournamentId, cardIds) {
     return `AttentionX: Register for tournament ${tournamentId} with cards [${cardIds.join(',')}]`;
 }
 
-export { registerPlayerPrivately, getRegistrationMessage, verifyRegistrationSignature };
+function getQueueSize() {
+    return _queue.length;
+}
+
+export { registerPlayerPrivately, getRegistrationMessage, verifyRegistrationSignature, getQueueSize };

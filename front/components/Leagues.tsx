@@ -105,7 +105,7 @@ const Leagues: React.FC = () => {
     const containerRef = useRef<HTMLDivElement>(null);
 
     // Hooks
-    const { isConnected, address, getSigner, signMessage, connect } = useWalletContext();
+    const { isConnected, address, getSigner, connect } = useWalletContext();
     const { networkId } = useNetwork();
     const { getCards, clearCache, isLoading: nftLoading } = useNFT();
     const { isVisible: showGuide, currentStep: guideStep, nextStep: guideNext, dismiss: guideDismiss } = useOnboarding('leagues');
@@ -310,36 +310,46 @@ const Leagues: React.FC = () => {
 
         const cardIds = deck.map(c => c!.tokenId) as [number, number, number, number, number];
 
-        // Private registration — sign message, server registers on-chain
-        // Cards never appear in user's transaction history
-        const message = `AttentionX: Register for tournament ${activeTournamentId} with cards [${cardIds.join(',')}]`;
-        const signature = await signMessage(message);
-        if (!signature) {
-            setSubmissionState('idle');
-            setSubmitError('Signature rejected.');
-            return;
-        }
-
         try {
-            const resp = await fetch(apiUrl('/tournament/register'), {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    tournamentId: activeTournamentId,
-                    cardIds,
-                    signature,
-                    address,
-                }),
-            });
-            const result = await resp.json();
-            if (!result.success) {
-                setSubmissionState('idle');
-                setSubmitError(friendlyContractError(result.error));
-                return;
-            }
+            // Encrypt card IDs with CoFHE SDK (client-side FHE encryption)
+            const { createCofheConfig, createCofheClient } = await import('@cofhe/sdk/web');
+            const { Encryptable } = await import('@cofhe/sdk');
+            const { sepolia: cofheSepolia } = await import('@cofhe/sdk/chains');
+            const { createPublicClient, createWalletClient, custom, http: viemHttp } = await import('viem');
+            const { sepolia } = await import('viem/chains');
+
+            const publicClient = createPublicClient({ chain: sepolia, transport: viemHttp('https://ethereum-sepolia-rpc.publicnode.com') });
+            const walletClient = createWalletClient({ chain: sepolia, transport: custom((window as any).ethereum) });
+
+            const config = createCofheConfig({ supportedChains: [cofheSepolia] as any });
+            const cofheClient = createCofheClient(config);
+            const [account] = await walletClient.getAddresses();
+            await cofheClient.connect(publicClient as any, walletClient as any);
+
+            // Encrypt 5 card IDs
+            setSubmitError(null);
+            const encryptables = cardIds.map(id => Encryptable.uint32(BigInt(id)));
+            const encrypted = await cofheClient.encryptInputs(encryptables)
+                .setAccount(account)
+                .onStep((step: any) => console.log('[CoFHE] Encrypting cards:', step))
+                .execute();
+
+            // Build InEuint32[5] for contract
+            const encryptedCards = encrypted.map((e: any) => ({
+                ctHash: e.ctHash,
+                signature: e.signature,
+            }));
+
+            // Submit encrypted cards to contract (user's own tx — cards are FHE encrypted)
+            const { getTournamentFHEContract } = await import('../lib/contracts');
+            const contract = getTournamentFHEContract(signer);
+            const tx = await contract.enterTournament(activeTournamentId, encryptedCards);
+            await tx.wait();
+
         } catch (err: any) {
             setSubmissionState('idle');
-            setSubmitError('Server error — please try again.');
+            const msg = err?.reason || err?.message || 'Registration failed';
+            setSubmitError(friendlyContractError(msg));
             return;
         }
 

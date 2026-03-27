@@ -28,7 +28,7 @@ export const TOURNAMENT_FHE_ABI = [
     'function lineupRevealed(uint256 tournamentId, address user) view returns (bool)',
 
     // Write functions
-    'function enterTournament(uint256 tournamentId, uint256[5] cardIds)',
+    'function enterTournament(uint256 tournamentId, tuple(bytes32 ctHash, bytes signature)[5] encryptedCardIds)',
     'function cancelEntry(uint256 tournamentId)',
     'function claimPrize(uint256 tournamentId)',
 

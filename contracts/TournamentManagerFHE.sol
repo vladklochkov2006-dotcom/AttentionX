@@ -132,11 +132,20 @@ contract TournamentManagerFHE is
     /// @notice Whether encrypted multiplier has been set for a token
     mapping(uint256 => bool) public multiplierSet;
 
+    /// @notice Encrypted card IDs per player (tournamentId => user => euint32[5])
+    /// @dev Cards are FHE-encrypted — only admin can decrypt for scoring
+    mapping(uint256 => mapping(address => euint32[5])) private encryptedLineups;
+
+    /// @notice Whether player has been verified (admin decrypted + confirmed ownership)
+    mapping(uint256 => mapping(address => bool)) public playerVerified;
+
     // ============ Events ============
 
     event TournamentCreated(uint256 indexed tournamentId, uint256 registrationStart, uint256 startTime, uint256 endTime);
     event TournamentUpdated(uint256 indexed tournamentId, uint256 newStartTime, uint256 newEndTime);
     event LineupRegistered(uint256 indexed tournamentId, address indexed user, uint256[5] cardIds);
+    event EncryptedLineupSubmitted(uint256 indexed tournamentId, address indexed user);
+    event PlayerVerified(uint256 indexed tournamentId, address indexed user);
     event LineupCancelled(uint256 indexed tournamentId, address indexed user);
     event TournamentFinalized(uint256 indexed tournamentId, uint256 prizePool, uint256 participantCount);
     event TournamentCancelled(uint256 indexed tournamentId);
@@ -676,61 +685,14 @@ contract TournamentManagerFHE is
      *         Server handles FHE scoring automatically.
      */
     /**
-     * @notice Admin registers a player's lineup on their behalf (privacy mode).
-     *         Cards are NOT visible in the user's tx history — only admin tx.
-     *         User must have signed an off-chain message proving consent.
+     * @notice Register for tournament with FHE-encrypted card IDs.
+     *         Cards are encrypted client-side — nobody can see your lineup.
+     *         No card locking — if you sell a tournament card, you get disqualified (score=0).
      */
-    function adminRegisterPlayer(
+    function enterTournament(
         uint256 tournamentId,
-        address player,
-        uint256[5] calldata cardIds
-    ) external onlyAdmin whenNotPaused nonReentrant {
-        Tournament storage tournament = tournaments[tournamentId];
-
-        if (tournament.id == 0) revert TournamentDoesNotExist();
-        if (tournament.status == TournamentStatus.Finalized) revert TournamentAlreadyFinalized();
-        if (tournament.status == TournamentStatus.Cancelled) revert TournamentCancelledError();
-        if (block.timestamp < tournament.registrationStart) revert RegistrationNotOpen();
-        if (block.timestamp >= tournament.startTime) revert TournamentAlreadyStarted();
-        if (hasEntered[tournamentId][player]) revert AlreadyEntered();
-
-        // Verify ownership (cards must belong to player) and lock
-        for (uint256 i = 0; i < LINEUP_SIZE; i++) {
-            if (nftContract.ownerOf(cardIds[i]) != player) revert NotCardOwner();
-            if (nftContract.isLocked(cardIds[i])) revert CardAlreadyLocked();
-        }
-
-        uint256[] memory tokenIds = new uint256[](LINEUP_SIZE);
-        for (uint256 i = 0; i < LINEUP_SIZE; i++) {
-            tokenIds[i] = cardIds[i];
-        }
-        nftContract.batchLock(tokenIds);
-
-        // Store lineup for player
-        lineups[tournamentId][player] = Lineup({
-            cardIds: cardIds,
-            owner: player,
-            timestamp: block.timestamp,
-            cancelled: false,
-            claimed: false
-        });
-
-        hasEntered[tournamentId][player] = true;
-        lineupRevealed[tournamentId][player] = true;
-        tournamentParticipants[tournamentId].push(player);
-        tournament.entryCount++;
-
-        // Emit without cardIds — privacy: nobody sees which cards were picked
-        emit LineupRegistered(tournamentId, player, cardIds);
-    }
-
-    /**
-     * @notice Direct self-registration (fallback, cards visible in tx).
-     *         For privacy, use the server-side adminRegisterPlayer flow.
-     */
-    function enterTournament(uint256 tournamentId, uint256[5] calldata cardIds)
-        external whenNotPaused nonReentrant
-    {
+        InEuint32[5] calldata encryptedCardIds
+    ) external whenNotPaused {
         Tournament storage tournament = tournaments[tournamentId];
 
         if (tournament.id == 0) revert TournamentDoesNotExist();
@@ -740,56 +702,65 @@ contract TournamentManagerFHE is
         if (block.timestamp >= tournament.startTime) revert TournamentAlreadyStarted();
         if (hasEntered[tournamentId][msg.sender]) revert AlreadyEntered();
 
+        // Store encrypted card IDs — nobody can read them
         for (uint256 i = 0; i < LINEUP_SIZE; i++) {
-            if (nftContract.ownerOf(cardIds[i]) != msg.sender) revert NotCardOwner();
-            if (nftContract.isLocked(cardIds[i])) revert CardAlreadyLocked();
+            euint32 encCard = FHE.asEuint32(encryptedCardIds[i]);
+            encryptedLineups[tournamentId][msg.sender][i] = encCard;
+            FHE.allowThis(encCard);
+            // Grant admin access to decrypt for scoring
+            FHE.allow(encCard, owner());
+            if (SECOND_ADMIN != address(0)) FHE.allow(encCard, SECOND_ADMIN);
+            if (THIRD_ADMIN != address(0)) FHE.allow(encCard, THIRD_ADMIN);
         }
 
-        uint256[] memory tokenIds = new uint256[](LINEUP_SIZE);
-        for (uint256 i = 0; i < LINEUP_SIZE; i++) {
-            tokenIds[i] = cardIds[i];
-        }
-        nftContract.batchLock(tokenIds);
+        hasEntered[tournamentId][msg.sender] = true;
+        tournamentParticipants[tournamentId].push(msg.sender);
+        tournament.entryCount++;
 
-        lineups[tournamentId][msg.sender] = Lineup({
+        emit EncryptedLineupSubmitted(tournamentId, msg.sender);
+    }
+
+    /**
+     * @notice Admin marks player as verified after decrypting + checking ownership off-chain.
+     *         Also stores plaintext lineup for scoring compatibility.
+     */
+    function adminVerifyPlayer(
+        uint256 tournamentId,
+        address player,
+        uint256[5] calldata cardIds
+    ) external onlyAdmin {
+        if (!hasEntered[tournamentId][player]) revert NotEntered();
+
+        lineups[tournamentId][player] = Lineup({
             cardIds: cardIds,
-            owner: msg.sender,
+            owner: player,
             timestamp: block.timestamp,
             cancelled: false,
             claimed: false
         });
+        lineupRevealed[tournamentId][player] = true;
+        playerVerified[tournamentId][player] = true;
 
-        hasEntered[tournamentId][msg.sender] = true;
-        lineupRevealed[tournamentId][msg.sender] = true;
-        tournamentParticipants[tournamentId].push(msg.sender);
-        tournament.entryCount++;
-
-        emit LineupRegistered(tournamentId, msg.sender, cardIds);
+        emit PlayerVerified(tournamentId, player);
     }
 
-    function cancelEntry(uint256 tournamentId) external nonReentrant {
+    /**
+     * @notice Get encrypted card IDs for a player (admin only — for decryption + scoring)
+     */
+    function getEncryptedLineup(uint256 tournamentId, address player)
+        external view onlyAdmin returns (euint32[5] memory)
+    {
+        return encryptedLineups[tournamentId][player];
+    }
+
+    function cancelEntry(uint256 tournamentId) external {
         Tournament storage tournament = tournaments[tournamentId];
 
         if (tournament.id == 0) revert TournamentDoesNotExist();
         if (!hasEntered[tournamentId][msg.sender]) revert NotEntered();
         if (block.timestamp >= tournament.startTime) revert CannotCancelAfterStart();
 
-        // If revealed — unlock NFTs
-        if (lineupRevealed[tournamentId][msg.sender]) {
-            Lineup storage lineup = lineups[tournamentId][msg.sender];
-            if (lineup.cancelled) revert LineupAlreadyCancelled();
-            lineup.cancelled = true;
-
-            uint256[] memory tokenIds = new uint256[](LINEUP_SIZE);
-            for (uint256 i = 0; i < LINEUP_SIZE; i++) {
-                tokenIds[i] = lineup.cardIds[i];
-            }
-            nftContract.batchUnlock(tokenIds);
-        } else {
-            // Committed but not yet revealed — just clear commitment
-            lineupCommitments[tournamentId][msg.sender] = bytes32(0);
-        }
-
+        // No unlock needed — cards were never locked
         hasEntered[tournamentId][msg.sender] = false;
         tournament.entryCount--;
 

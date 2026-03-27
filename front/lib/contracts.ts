@@ -149,7 +149,7 @@ export const TOURNAMENT_ABI = [
     'function getUserTournamentHistory(address user) view returns (tuple(uint256 tournamentId, uint256 startTime, uint256 endTime, uint256 prizePool, uint256 entryCount, uint8 status, uint256 userScore, uint256 userPrize, bool claimed)[])',
     'function getAllTournamentsSummary() view returns (tuple(uint256 id, uint256 registrationStart, uint256 startTime, uint256 revealDeadline, uint256 endTime, uint256 prizePool, uint256 entryCount, uint8 status)[])',
     // Write functions
-    'function enterTournament(uint256 tournamentId, uint256[5] cardIds)',
+    'function enterTournament(uint256 tournamentId, tuple(bytes32 ctHash, bytes signature)[5] encryptedCardIds)',
     'function cancelEntry(uint256 tournamentId)',
     'function claimPrize(uint256 tournamentId)',
     // Admin functions

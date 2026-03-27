@@ -12,7 +12,7 @@
     "TournamentManager": "0x1B0e40BbB6b436866cf64882DBcECb01F5207f81",
     "TournamentManagerFHE": {
       "proxy": "0x1B0e40BbB6b436866cf64882DBcECb01F5207f81",
-      "implementation": "0xdC69b04e9F1446575d3dA01CeB52A3c429247515"
+      "implementation": "0x9De6F4dC37bc0D34e36c8f64Da0514f68e784a1f"
     },
     "DarkLeaderboard": "0xf08e22e350026c670D86ef0A794064e9D301d5eE",
     "EncryptedCardStats": "0x412bE266fA5e3f78Af950bb96860D839699d3822",

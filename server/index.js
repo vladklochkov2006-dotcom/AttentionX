@@ -1356,6 +1356,22 @@ async function startServer() {
         // Periodic sync every 60 seconds
         setInterval(syncTournamentFromBlockchain, 60000);
 
+        // Player verification — check for new encrypted registrations every 30s
+        async function runPlayerVerification() {
+            try {
+                const { verifyNewPlayers } = await import('./jobs/verify-players.js');
+                const result = await verifyNewPlayers();
+                if (result.verified > 0) {
+                    console.log(`[VERIFY] Verified ${result.verified} new players`);
+                }
+            } catch (err) {
+                console.error('[VERIFY] Error:', err.message);
+            }
+        }
+        setTimeout(runPlayerVerification, 5000);
+        setInterval(runPlayerVerification, 30000);
+        console.log('Player verification: every 30s');
+
         // Schedule daily scorer at 00:00 UTC
         scheduleDailyScorer();
 
