@@ -1163,7 +1163,7 @@ async function syncTournamentFromBlockchain() {
             'function activeTournamentId() view returns (uint256)',
         ], provider);
         const tournamentContract = new ethers.Contract(CONTRACTS.TournamentManager, [
-            'function getTournament(uint256 id) view returns (tuple(uint256 id, uint256 registrationStart, uint256 startTime, uint256 endTime, uint256 prizePool, uint256 entryCount, uint8 status))',
+            'function getTournament(uint256 id) view returns (tuple(uint256 id, uint256 registrationStart, uint256 startTime, uint256 revealDeadline, uint256 endTime, uint256 prizePool, uint256 entryCount, uint8 status))',
             'function nextTournamentId() view returns (uint256)',
         ], provider);
 
