@@ -1,10 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { X, Share2, Calendar, Star, Hash, Layers, ExternalLink, TrendingUp, Building2, Lock, Eye, Loader2, AlertCircle } from 'lucide-react';
+import { X, Share2, Calendar, Star, Hash, Layers, ExternalLink, TrendingUp, Building2 } from 'lucide-react';
 import { CardData, Rarity } from '../types';
 import { STARTUPS, getActiveContracts } from '../lib/contracts';
 import { getActiveNetwork } from '../lib/networks';
-import { usePrivateCardStats } from '../hooks/usePrivateCardStats';
-import { useWalletContext } from '../context/WalletContext';
 
 export interface CardDetailData {
     id: string;
@@ -31,12 +29,6 @@ const RARITY_COLORS: Record<string, string> = {
 };
 
 const CardDetailModal: React.FC<CardDetailModalProps> = ({ data, cardData, onClose }) => {
-    const { getMyCardPower, isLoading: fheLoading, isFhenixNetwork } = usePrivateCardStats();
-    const { getSigner, walletProvider } = useWalletContext();
-    const [decryptedPower, setDecryptedPower] = useState<number | null>(null);
-    const [powerRevealed, setPowerRevealed] = useState(false);
-    const [decrypting, setDecrypting] = useState(false);
-    const [decryptError, setDecryptError] = useState<string | null>(null);
 
     if (!data && !cardData) return null;
 
@@ -51,50 +43,6 @@ const CardDetailModal: React.FC<CardDetailModalProps> = ({ data, cardData, onClo
     const isLocked = cardData?.isLocked;
     const description = cardData?.description || 'YC startup building innovative solutions.';
     const fundraising = cardData?.fundraising;
-
-    const handleDecryptPower = async () => {
-        if (!tokenId || !isFhenixNetwork) return;
-        if (!walletProvider) {
-            setDecryptError('Wallet not connected');
-            return;
-        }
-        setDecrypting(true);
-        setDecryptError(null);
-        try {
-            const signer = await getSigner();
-            if (!signer) {
-                setDecryptError('Could not get signer — is your wallet connected?');
-                return;
-            }
-
-            // Create viem clients for CoFHE SDK decryption
-            const viem = await import('viem');
-            const { sepolia: viemSepolia } = await import('viem/chains');
-
-            const publicClient = viem.createPublicClient({
-                chain: viemSepolia,
-                transport: viem.http(),
-            });
-            const walletClient = viem.createWalletClient({
-                chain: viemSepolia,
-                transport: viem.custom(walletProvider as any),
-            });
-
-            const power = await getMyCardPower(publicClient, walletClient, signer, tokenId);
-            if (power !== null) {
-                setDecryptedPower(power);
-                setPowerRevealed(true);
-            } else {
-                setDecryptError('Stats not set for this card, or you are not the owner.');
-            }
-        } catch (e: any) {
-            const msg = e.reason || e.message || 'Decryption failed';
-            console.error('Decrypt failed:', e);
-            setDecryptError(msg);
-        } finally {
-            setDecrypting(false);
-        }
-    };
 
     const fundingHistory = fundraising ? [
         {
@@ -200,39 +148,6 @@ const CardDetailModal: React.FC<CardDetailModalProps> = ({ data, cardData, onClo
                                 <p className="mt-1 md:mt-2 text-[10px] md:text-xs text-gray-500">Score multiplier</p>
                             </div>
 
-                            {/* Encrypted Power — FHE networks only */}
-                            <div className="p-2.5 md:p-4 rounded-lg bg-green-500/5 border border-green-500/20">
-                                <div className="flex items-center gap-1 md:gap-2 text-green-400 mb-1 md:mb-2">
-                                    <Lock className="w-3 h-3 md:w-4 md:h-4" />
-                                    <span className="text-[10px] md:text-xs font-semibold uppercase">Encrypted Power</span>
-                                </div>
-                                {powerRevealed ? (
-                                    <p className="text-base md:text-2xl font-bold text-green-400 font-mono tracking-tight">
-                                        {decryptedPower}
-                                    </p>
-                                ) : (
-                                    <button
-                                        onClick={handleDecryptPower}
-                                        disabled={decrypting}
-                                        className="flex items-center gap-1 text-base md:text-2xl font-bold text-green-400 font-mono tracking-tight hover:text-green-300 transition-colors"
-                                    >
-                                        {decrypting ? (
-                                            <><Loader2 className="w-4 h-4 animate-spin" /> Decrypting...</>
-                                        ) : (
-                                            <><Eye className="w-4 h-4" /> **** <span className="text-[10px] font-normal">tap to reveal</span></>
-                                        )}
-                                    </button>
-                                )}
-                                {decryptError && (
-                                    <div className="mt-1 flex items-center gap-1 text-[10px] text-red-400">
-                                        <AlertCircle className="w-3 h-3 shrink-0" />
-                                        <span className="truncate">{decryptError}</span>
-                                    </div>
-                                )}
-                                <p className="mt-1 md:mt-2 text-[10px] md:text-xs text-green-500/60">
-                                    {powerRevealed ? 'Decrypted with your wallet' : 'Only you can decrypt'}
-                                </p>
-                            </div>
 
                             <div className="p-2.5 md:p-4 rounded-lg bg-gray-50 dark:bg-white/[0.04] border border-gray-100 dark:border-white/[0.06]">
                                 <div className="flex items-center gap-1 md:gap-2 text-gray-500 dark:text-gray-400 mb-1 md:mb-2">
