@@ -334,11 +334,8 @@ const Leagues: React.FC = () => {
                 .onStep((step: any) => console.log('[CoFHE] Encrypting cards:', step))
                 .execute();
 
-            // Build InEuint32[5] for contract
-            const encryptedCards = encrypted.map((e: any) => ({
-                ctHash: e.ctHash,
-                signature: e.signature,
-            }));
+            // Build InEuint32[5] for contract — must match (uint256 ctHash, uint8 securityZone, uint8 utype, bytes signature)
+            const encryptedCards = encrypted.map((e: any) => e);
 
             // Submit encrypted cards to contract (user's own tx — cards are FHE encrypted)
             const { getTournamentFHEContract } = await import('../lib/contracts');

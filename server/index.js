@@ -1282,6 +1282,22 @@ function scheduleDailyScorer() {
     setTimeout(checkFinalization, 10000);
     setInterval(checkFinalization, 60 * 60 * 1000);
     console.log('Finalization checker: every 1h');
+
+    // Verify encrypted lineups every 5 minutes
+    async function checkVerification() {
+        try {
+            const { verifyUnverifiedPlayers } = await import('./jobs/verify-lineups.js');
+            const result = await verifyUnverifiedPlayers();
+            if (result.success && !result.reason.includes('Verified 0')) {
+                console.log(`[CRON] Lineup verification: ${result.reason}`);
+            }
+        } catch (err) {
+            console.error('[CRON] Verification error:', err.message);
+        }
+    }
+    setTimeout(checkVerification, 15000); // first check after 15s
+    setInterval(checkVerification, 5 * 60 * 1000); // then every 5 min
+    console.log('Lineup verification: every 5min');
 }
 
 // ============= AI FEED SUMMARIZER =============

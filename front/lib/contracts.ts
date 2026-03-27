@@ -149,7 +149,7 @@ export const TOURNAMENT_ABI = [
     'function getUserTournamentHistory(address user) view returns (tuple(uint256 tournamentId, uint256 startTime, uint256 endTime, uint256 prizePool, uint256 entryCount, uint8 status, uint256 userScore, uint256 userPrize, bool claimed)[])',
     'function getAllTournamentsSummary() view returns (tuple(uint256 id, uint256 registrationStart, uint256 startTime, uint256 revealDeadline, uint256 endTime, uint256 prizePool, uint256 entryCount, uint8 status)[])',
     // Write functions
-    'function enterTournament(uint256 tournamentId, tuple(bytes32 ctHash, bytes signature)[5] encryptedCardIds)',
+    'function enterTournament(uint256 tournamentId, tuple(uint256 ctHash, uint8 securityZone, uint8 utype, bytes signature)[5] encryptedCardIds)',
     'function cancelEntry(uint256 tournamentId)',
     'function claimPrize(uint256 tournamentId)',
     // Admin functions
@@ -363,8 +363,8 @@ export function getDarkLeaderboardContract(signerOrProvider?: ethers.Signer | et
 // ============ SealedBidMarketplace ============
 
 export const SEALED_BID_MARKETPLACE_ABI = [
-    "function listSealed(uint256 tokenId, (bytes32 ctHash, bytes signature) encMinPrice) returns (uint256)",
-    "function placeSealedBid(uint256 listingId, (bytes32 ctHash, bytes signature) encBid) payable returns (uint256)",
+    "function listSealed(uint256 tokenId, (uint256 ctHash, uint8 securityZone, uint8 utype, bytes signature) encMinPrice) returns (uint256)",
+    "function placeSealedBid(uint256 listingId, (uint256 ctHash, uint8 securityZone, uint8 utype, bytes signature) encBid) payable returns (uint256)",
     "function acceptSealedBid(uint256 bidId)",
     "function cancelSealedListing(uint256 listingId)",
     "function cancelSealedBid(uint256 bidId)",

@@ -66,7 +66,7 @@ const TOURNAMENT_FHE_ADMIN_ABI = [
     ...TOURNAMENT_FHE_ABI,
     // Admin write functions
     'function createTournament(uint256 registrationStart, uint256 startTime, uint256 endTime) returns (uint256)',
-    'function setEncryptedPoints(uint256 tournamentId, tuple(bytes32 ctHash, bytes signature)[19] inPoints)',
+    'function setEncryptedPoints(uint256 tournamentId, tuple(uint256 ctHash, uint8 securityZone, uint8 utype, bytes signature)[19] inPoints)',
     'function setPointsFromPlaintext(uint256 tournamentId, uint32[19] rawPoints)',
     'function computeEncryptedScores(uint256 tournamentId, uint256 batchStart, uint256 batchSize)',
     'function finalizeScores(uint256 tournamentId)',

@@ -548,7 +548,7 @@ const AdminPanel: React.FC = () => {
                 const network = getNet();
                 const contract = new ethers.Contract(
                     network.contracts.TournamentManagerFHE,
-                    ['function setEncryptedPoints(uint256 tournamentId, tuple(bytes32 ctHash, bytes signature)[19] inPoints)'],
+                    ['function setEncryptedPoints(uint256 tournamentId, tuple(uint256 ctHash, uint8 securityZone, uint8 utype, bytes signature)[19] inPoints)'],
                     signer
                 );
                 const tx = await contract.setEncryptedPoints(fheSelectedTournament, inPoints);
