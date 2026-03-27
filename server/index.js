@@ -167,6 +167,11 @@ app.get('/api/leaderboard/:tournamentId', (req, res) => {
     }
     const tournamentId = parseInt(req.params.tournamentId);
     const limit = Math.min(parseInt(req.query.limit) || 100, 500);
+
+    // Privacy mode: hide individual scores during active tournament
+    const tournamentInfo = db.getTournamentInfo?.(tournamentId);
+    const isActive = tournamentInfo && !['finalized', 'cancelled'].includes(tournamentInfo.status);
+
     const cacheKey = `leaderboard:${tournamentId}:${limit}`;
     const hit = sc_get(cacheKey);
     if (hit) return res.json(hit);
@@ -190,11 +195,13 @@ app.get('/api/leaderboard/:tournamentId', (req, res) => {
             return {
                 rank: entry.rank,
                 address: entry.address,
-                score: entry.score,
+                // Hide scores during active tournament (privacy mode)
+                score: isActive ? null : entry.score,
                 lastUpdated: entry.lastUpdated,
                 username: profileMap[entry.address]?.username || null,
                 avatar: profileMap[entry.address]?.avatar_url || null,
-                integrityVerified,
+                integrityVerified: isActive ? null : integrityVerified,
+                encrypted: isActive ? true : false,
             };
         });
 
@@ -943,6 +950,44 @@ app.get('/health', (req, res) => {
 });
 
 /**
+ * POST /api/tournament/register
+ * Private tournament registration — server registers on behalf of user.
+ * Body: { tournamentId, cardIds: [5], signature }
+ */
+app.post('/api/tournament/register', async (req, res) => {
+    try {
+        const { tournamentId, cardIds, signature, address } = req.body;
+
+        if (!tournamentId || !cardIds || !signature || !address) {
+            return res.status(400).json({ success: false, error: 'Missing fields: tournamentId, cardIds, signature, address' });
+        }
+        if (!Array.isArray(cardIds) || cardIds.length !== 5) {
+            return res.status(400).json({ success: false, error: 'cardIds must be array of 5' });
+        }
+
+        const { registerPlayerPrivately } = await import('./services/private-registration.js');
+        const result = await registerPlayerPrivately(address, tournamentId, cardIds, signature);
+
+        if (result.success) {
+            // Store cards privately in DB for scoring
+            db.savePlayerCards(tournamentId, address.toLowerCase(), cardIds.map((id, i) => ({
+                tokenId: id,
+                name: `Card #${id}`,
+                rarity: 'Unknown',
+                multiplier: 1
+            })));
+            db.saveTournamentEntry(tournamentId, address.toLowerCase());
+            db.saveDatabase();
+        }
+
+        return res.json(result);
+    } catch (error) {
+        console.error('[REGISTER]', error.message);
+        return res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
  * POST /api/run-scorer
  * Trigger daily scoring (runs within server process to share DB).
  * Body: { date?: "YYYY-MM-DD" } - optional, defaults to yesterday UTC.
@@ -1195,6 +1240,16 @@ function scheduleDailyScorer() {
             db.saveDatabase();
             console.log('[CRON] Daily scorer complete, running AI summarizer...');
             await runAiSummarizer();
+
+            // Run FHE automation after scoring (encrypt points + compute scores on-chain)
+            try {
+                const { runFheAutomation } = await import('./jobs/fhe-automation.js');
+                console.log('[CRON] Running FHE automation...');
+                const fheResult = await runFheAutomation();
+                console.log(`[CRON] FHE: ${fheResult.reason}`);
+            } catch (fheErr) {
+                console.error('[CRON] FHE automation error:', fheErr.message);
+            }
         } catch (err) {
             console.error('[CRON] Scorer error:', err.message);
         }

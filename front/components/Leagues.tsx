@@ -5,13 +5,12 @@ import { useWalletContext } from '../context/WalletContext';
 import { useNFT } from '../hooks/useNFT';
 import { useTournament, Tournament } from '../hooks/useTournament';
 import { useLeaderboard, usePlayerRank } from '../hooks/useLeaderboard';
-import { formatXTZ, getProvider } from '../lib/contracts';
+import { formatXTZ } from '../lib/contracts';
 import { currencySymbol } from '../lib/networks';
 import { generatePixelAvatar } from '../lib/pixelAvatar';
 import { blockchainCache, CacheKeys } from '../lib/cache';
 import { apiUrl } from '../lib/api';
 import { useNetwork } from '../context/NetworkContext';
-import { useTournamentFHE } from '../hooks/useTournamentFHE';
 import { isFhenixNetwork } from '../lib/fhenix';
 import gsap from 'gsap';
 import { useOnboarding } from '../hooks/useOnboarding';
@@ -88,9 +87,6 @@ const Leagues: React.FC = () => {
     const [deck, setDeck] = useState<(CardData | null)[]>([null, null, null, null, null]);
     const [submissionState, setSubmissionState] = useState<'idle' | 'submitting' | 'success'>('idle');
     const [submitError, setSubmitError] = useState<string | null>(null);
-    const [pendingReveal, setPendingReveal] = useState(false); // True if committed but not revealed
-    const [lineupRevealed, setLineupRevealed] = useState(false); // True if already revealed on-chain
-    const { commitLineup, revealLineup, generateSalt, getCommitStatus } = useTournamentFHE();
     const [availableCards, setAvailableCards] = useState<CardData[]>([]);
     const [activeTournament, setActiveTournament] = useState<Tournament | null>(null);
     const [activeTournamentId, setActiveTournamentId] = useState<number>(0);
@@ -109,7 +105,7 @@ const Leagues: React.FC = () => {
     const containerRef = useRef<HTMLDivElement>(null);
 
     // Hooks
-    const { isConnected, address, getSigner, connect } = useWalletContext();
+    const { isConnected, address, getSigner, signMessage, connect } = useWalletContext();
     const { networkId } = useNetwork();
     const { getCards, clearCache, isLoading: nftLoading } = useNFT();
     const { isVisible: showGuide, currentStep: guideStep, nextStep: guideNext, dismiss: guideDismiss } = useOnboarding('leagues');
@@ -153,8 +149,6 @@ const Leagues: React.FC = () => {
                 const now = Date.now() / 1000;
                 if (tournament.status === 'Finalized' || tournament.status === 'Cancelled') {
                     setPhase(tournament.status === 'Finalized' ? 'finalized' : 'ended');
-                    setPendingReveal(false);
-                    setLineupRevealed(false);
                 } else if (now < tournament.registrationStart) {
                     setPhase('upcoming');
                 } else if (now >= tournament.registrationStart && now < tournament.startTime) {
@@ -171,43 +165,7 @@ const Leagues: React.FC = () => {
                     const entered = await hasEntered(tournamentIdToLoad, address);
                     setHasUserEntered(entered);
 
-                    // Clean up stale localStorage from old/cancelled tournaments
-                    if (!entered) {
-                        setPendingReveal(false);
-                        setLineupRevealed(false);
-                        // Clean up any leftover commit data for this tournament
-                        localStorage.removeItem(`attentionx:salt:${tournamentIdToLoad}:${address}`);
-                        localStorage.removeItem(`attentionx:cards:${tournamentIdToLoad}:${address}`);
-                    }
-
-                    // Check commit/reveal status on-chain (FHE privacy mode)
-                    if (entered && isFhenixNetwork()) {
-                        try {
-                            const provider = getProvider();
-                            const { committed, revealed } = await getCommitStatus(provider, tournamentIdToLoad, address);
-                            if (revealed) {
-                                // Already revealed on-chain — clean up localStorage
-                                localStorage.removeItem(`attentionx:salt:${tournamentIdToLoad}:${address}`);
-                                localStorage.removeItem(`attentionx:cards:${tournamentIdToLoad}:${address}`);
-                                setLineupRevealed(true);
-                                setPendingReveal(false);
-                            } else if (committed) {
-                                // Committed but not yet revealed
-                                setLineupRevealed(false);
-                                setPendingReveal(true);
-                            } else {
-                                // Not committed — fallback to localStorage check
-                                const storedSalt = localStorage.getItem(`attentionx:salt:${tournamentIdToLoad}:${address}`);
-                                setLineupRevealed(false);
-                                setPendingReveal(!!storedSalt);
-                            }
-                        } catch {
-                            // RPC error — fallback to localStorage
-                            const storedSalt = localStorage.getItem(`attentionx:salt:${tournamentIdToLoad}:${address}`);
-                            setLineupRevealed(false);
-                            setPendingReveal(!!storedSalt);
-                        }
-                    }
+                    // Direct registration — no commit-reveal needed
 
                     // If finalized, check prize info
                     if (tournament.status === 'Finalized' && entered) {
@@ -319,46 +277,6 @@ const Leagues: React.FC = () => {
         return err;
     };
 
-    const handleReveal = async () => {
-        if (activeTournamentId === 0 || !address) return;
-        const storedSalt = localStorage.getItem(`attentionx:salt:${activeTournamentId}:${address}`);
-        const storedCards = localStorage.getItem(`attentionx:cards:${activeTournamentId}:${address}`);
-        if (!storedSalt || !storedCards) {
-            setSubmitError('No commitment found. Did you commit your lineup in registration phase?');
-            return;
-        }
-
-        setSubmissionState('submitting');
-        setSubmitError(null);
-        const signer = await getSigner();
-        if (!signer) {
-            setSubmissionState('idle');
-            setSubmitError('Wallet not connected. Please connect your wallet.');
-            return;
-        }
-
-        const cardIds = JSON.parse(storedCards) as [number, number, number, number, number];
-        const { hash: revealHash, error: revealError } = await revealLineup(signer, activeTournamentId, cardIds, storedSalt);
-
-        if (revealHash) {
-            setPendingReveal(false);
-            setLineupRevealed(true);
-            // Clear stored data after reveal
-            localStorage.removeItem(`attentionx:salt:${activeTournamentId}:${address}`);
-            localStorage.removeItem(`attentionx:cards:${activeTournamentId}:${address}`);
-            if (address) { clearCache(); getCards(address, true); }
-            setHasUserEntered(true);
-            setSubmissionState('success');
-            setTimeout(() => {
-                setIsJoining(false);
-                setSubmissionState('idle');
-            }, 2500);
-        } else {
-            setSubmissionState('idle');
-            setSubmitError(friendlyContractError(revealError));
-        }
-    };
-
     const handleSubmit = async () => {
         setSubmitError(null);
 
@@ -392,19 +310,36 @@ const Leagues: React.FC = () => {
 
         const cardIds = deck.map(c => c!.tokenId) as [number, number, number, number, number];
 
-        // Commit lineup with encrypted hash (commit-reveal for privacy)
-        const salt = generateSalt();
-        // Store salt in localStorage — needed for reveal later
-        localStorage.setItem(`attentionx:salt:${activeTournamentId}:${address}`, salt);
-        localStorage.setItem(`attentionx:cards:${activeTournamentId}:${address}`, JSON.stringify(cardIds));
-        const { hash: commitHash, error: commitError } = await commitLineup(signer, activeTournamentId, cardIds, salt);
-
-        if (!commitHash) {
+        // Private registration — sign message, server registers on-chain
+        // Cards never appear in user's transaction history
+        const message = `AttentionX: Register for tournament ${activeTournamentId} with cards [${cardIds.join(',')}]`;
+        const signature = await signMessage(message);
+        if (!signature) {
             setSubmissionState('idle');
-            setSubmitError(friendlyContractError(commitError));
-            // Clear stored data on failure
-            localStorage.removeItem(`attentionx:salt:${activeTournamentId}:${address}`);
-            localStorage.removeItem(`attentionx:cards:${activeTournamentId}:${address}`);
+            setSubmitError('Signature rejected.');
+            return;
+        }
+
+        try {
+            const resp = await fetch(apiUrl('/tournament/register'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    tournamentId: activeTournamentId,
+                    cardIds,
+                    signature,
+                    address,
+                }),
+            });
+            const result = await resp.json();
+            if (!result.success) {
+                setSubmissionState('idle');
+                setSubmitError(friendlyContractError(result.error));
+                return;
+            }
+        } catch (err: any) {
+            setSubmissionState('idle');
+            setSubmitError('Server error — please try again.');
             return;
         }
 
@@ -413,7 +348,6 @@ const Leagues: React.FC = () => {
             clearCache();
             getCards(address, true);
         }
-        setPendingReveal(true); // committed, needs reveal during active phase
 
         // Run success animation
         const ctx = gsap.context(() => {
@@ -668,32 +602,8 @@ const Leagues: React.FC = () => {
                                 </div>
                             )}
 
-                            {/* Reveal / Revealed states — shown during reveal phase */}
-                            {phase === 'reveal' && (
-                                pendingReveal ? (
-                                    <button
-                                        disabled={submissionState !== 'idle'}
-                                        onClick={handleReveal}
-                                        className={`mt-3 w-full py-2.5 rounded-lg font-black text-xs uppercase tracking-wider transition-all hidden sm:flex items-center justify-center gap-1.5
-                                            ${submissionState === 'submitting'
-                                                ? 'bg-orange-500 text-white cursor-wait opacity-80'
-                                                : 'bg-orange-500 hover:bg-orange-600 text-white shadow-lg active:scale-95'}`}
-                                    >
-                                        {submissionState === 'submitting' ? (
-                                            <><Loader2 size={14} className="animate-spin" /> Revealing...</>
-                                        ) : (
-                                            <><Shield size={14} />Reveal Lineup</>
-                                        )}
-                                    </button>
-                                ) : lineupRevealed ? (
-                                    <div className="mt-3 hidden sm:flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg bg-green-500/10 border border-green-500/25 text-green-400 text-xs font-bold">
-                                        <CheckCircle size={13} /> Lineup revealed — scoring in progress
-                                    </div>
-                                ) : null
-                            )}
-
                             {/* Submit Button - desktop only */}
-                            {phase !== 'reveal' && (
+                            {(
                                 <button
                                     disabled={deck.includes(null) || submissionState !== 'idle'}
                                     onClick={handleSubmit}
@@ -794,32 +704,7 @@ const Leagues: React.FC = () => {
                                     <p className="text-xs text-red-400 font-medium">{submitError}</p>
                                 </div>
                             )}
-                            {phase === 'reveal' ? (
-                                pendingReveal ? (
-                                    <button
-                                        disabled={submissionState !== 'idle'}
-                                        onClick={handleReveal}
-                                        className={`w-full py-3 rounded-lg font-black text-sm uppercase tracking-wider transition-all flex items-center justify-center gap-2
-                                            ${submissionState === 'submitting'
-                                                ? 'bg-orange-500 text-white cursor-wait opacity-80'
-                                                : 'bg-orange-500 hover:bg-orange-600 text-white shadow-lg active:scale-95'}`}
-                                    >
-                                        {submissionState === 'submitting' ? (
-                                            <><Loader2 size={14} className="animate-spin" />Revealing...</>
-                                        ) : (
-                                            <><Shield size={14} />Reveal Lineup</>
-                                        )}
-                                    </button>
-                                ) : lineupRevealed ? (
-                                    <div className="flex items-center justify-center gap-2 px-3 py-3 rounded-lg bg-green-500/10 border border-green-500/25 text-green-400 text-sm font-bold">
-                                        <CheckCircle size={16} /> Lineup revealed — scoring in progress
-                                    </div>
-                                ) : (
-                                    <div className="flex items-center justify-center px-3 py-3 rounded-lg bg-gray-500/10 border border-gray-500/25 text-gray-400 text-sm font-semibold">
-                                        Reveal window active — no commitment found
-                                    </div>
-                                )
-                            ) : (
+                            {(
                                 <button
                                     disabled={deck.includes(null) || submissionState !== 'idle'}
                                     onClick={handleSubmit}
@@ -1013,24 +898,8 @@ const Leagues: React.FC = () => {
                         ) : (
                             <span className="text-gray-500 font-bold">Tournament finalized - no prize earned</span>
                         )
-                    ) : hasUserEntered && pendingReveal ? (
-                        <div className="flex flex-col items-start gap-2">
-                            <div className="flex items-center gap-4">
-                                <span className="text-yellow-400 font-bold flex items-center">
-                                    <Shield className="w-5 h-5 mr-2" /> Lineup committed — reveal needed
-                                </span>
-                                <button
-                                    onClick={handleReveal}
-                                    disabled={submissionState === 'submitting'}
-                                    className="bg-yellow-500 text-black hover:bg-yellow-400 px-4 py-2 rounded-lg font-black text-xs uppercase tracking-wide transition-all disabled:opacity-60"
-                                >
-                                    {submissionState === 'submitting' ? 'Revealing...' : 'Reveal Lineup'}
-                                </button>
-                            </div>
-                            {submitError && (
-                                <p className="text-xs text-red-400 font-medium">{submitError}</p>
-                            )}
-                        </div>
+                    ) : false ? (
+                        null
                     ) : hasUserEntered ? (
                         <div className="flex items-center gap-4">
                             <span className="text-yc-green font-bold flex items-center">

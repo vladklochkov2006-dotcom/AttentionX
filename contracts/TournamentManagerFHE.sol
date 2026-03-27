@@ -672,13 +672,99 @@ contract TournamentManagerFHE is
     }
 
     /**
-     * @notice DEPRECATED — use commitLineup + revealLineup instead.
-     * @dev Kept only for interface compatibility. Always reverts.
+     * @notice Direct registration — picks cards, locks them, done in 1 tx.
+     *         Server handles FHE scoring automatically.
      */
-    function enterTournament(uint256 /* tournamentId */, uint256[5] calldata /* cardIds */)
-        external pure
+    /**
+     * @notice Admin registers a player's lineup on their behalf (privacy mode).
+     *         Cards are NOT visible in the user's tx history — only admin tx.
+     *         User must have signed an off-chain message proving consent.
+     */
+    function adminRegisterPlayer(
+        uint256 tournamentId,
+        address player,
+        uint256[5] calldata cardIds
+    ) external onlyAdmin whenNotPaused nonReentrant {
+        Tournament storage tournament = tournaments[tournamentId];
+
+        if (tournament.id == 0) revert TournamentDoesNotExist();
+        if (tournament.status == TournamentStatus.Finalized) revert TournamentAlreadyFinalized();
+        if (tournament.status == TournamentStatus.Cancelled) revert TournamentCancelledError();
+        if (block.timestamp < tournament.registrationStart) revert RegistrationNotOpen();
+        if (block.timestamp >= tournament.startTime) revert TournamentAlreadyStarted();
+        if (hasEntered[tournamentId][player]) revert AlreadyEntered();
+
+        // Verify ownership (cards must belong to player) and lock
+        for (uint256 i = 0; i < LINEUP_SIZE; i++) {
+            if (nftContract.ownerOf(cardIds[i]) != player) revert NotCardOwner();
+            if (nftContract.isLocked(cardIds[i])) revert CardAlreadyLocked();
+        }
+
+        uint256[] memory tokenIds = new uint256[](LINEUP_SIZE);
+        for (uint256 i = 0; i < LINEUP_SIZE; i++) {
+            tokenIds[i] = cardIds[i];
+        }
+        nftContract.batchLock(tokenIds);
+
+        // Store lineup for player
+        lineups[tournamentId][player] = Lineup({
+            cardIds: cardIds,
+            owner: player,
+            timestamp: block.timestamp,
+            cancelled: false,
+            claimed: false
+        });
+
+        hasEntered[tournamentId][player] = true;
+        lineupRevealed[tournamentId][player] = true;
+        tournamentParticipants[tournamentId].push(player);
+        tournament.entryCount++;
+
+        // Emit without cardIds — privacy: nobody sees which cards were picked
+        emit LineupRegistered(tournamentId, player, cardIds);
+    }
+
+    /**
+     * @notice Direct self-registration (fallback, cards visible in tx).
+     *         For privacy, use the server-side adminRegisterPlayer flow.
+     */
+    function enterTournament(uint256 tournamentId, uint256[5] calldata cardIds)
+        external whenNotPaused nonReentrant
     {
-        revert("Use commitLineup() + revealLineup() for privacy");
+        Tournament storage tournament = tournaments[tournamentId];
+
+        if (tournament.id == 0) revert TournamentDoesNotExist();
+        if (tournament.status == TournamentStatus.Finalized) revert TournamentAlreadyFinalized();
+        if (tournament.status == TournamentStatus.Cancelled) revert TournamentCancelledError();
+        if (block.timestamp < tournament.registrationStart) revert RegistrationNotOpen();
+        if (block.timestamp >= tournament.startTime) revert TournamentAlreadyStarted();
+        if (hasEntered[tournamentId][msg.sender]) revert AlreadyEntered();
+
+        for (uint256 i = 0; i < LINEUP_SIZE; i++) {
+            if (nftContract.ownerOf(cardIds[i]) != msg.sender) revert NotCardOwner();
+            if (nftContract.isLocked(cardIds[i])) revert CardAlreadyLocked();
+        }
+
+        uint256[] memory tokenIds = new uint256[](LINEUP_SIZE);
+        for (uint256 i = 0; i < LINEUP_SIZE; i++) {
+            tokenIds[i] = cardIds[i];
+        }
+        nftContract.batchLock(tokenIds);
+
+        lineups[tournamentId][msg.sender] = Lineup({
+            cardIds: cardIds,
+            owner: msg.sender,
+            timestamp: block.timestamp,
+            cancelled: false,
+            claimed: false
+        });
+
+        hasEntered[tournamentId][msg.sender] = true;
+        lineupRevealed[tournamentId][msg.sender] = true;
+        tournamentParticipants[tournamentId].push(msg.sender);
+        tournament.entryCount++;
+
+        emit LineupRegistered(tournamentId, msg.sender, cardIds);
     }
 
     function cancelEntry(uint256 tournamentId) external nonReentrant {
