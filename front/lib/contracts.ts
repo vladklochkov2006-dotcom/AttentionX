@@ -388,7 +388,13 @@ export function getSealedBidMarketplaceContract(signerOrProvider?: ethers.Signer
 
 // ============ Utils ============
 export function formatXTZ(wei: bigint): string {
-    return ethers.formatEther(wei);
+    const eth = Number(ethers.formatEther(wei));
+    if (eth === 0) return '0';
+    if (eth >= 1) return eth.toFixed(2);
+    // Show up to 4 significant digits for small amounts
+    if (eth >= 0.01) return eth.toFixed(2);
+    if (eth >= 0.001) return eth.toFixed(3);
+    return eth.toFixed(4);
 }
 
 export function parseXTZ(xtz: string): bigint {
