@@ -146,7 +146,7 @@ const AdminPanel: React.FC = () => {
 
     // Helper: get signer or show error
     const requireSigner = async () => {
-        const signer = await requireSigner();
+        const signer = await getSigner();
         if (!signer) {
             showMessage('error', 'Wallet not connected or signer unavailable. Reconnect your wallet.');
             console.error('[Admin] getSigner() returned null. isConnected:', isConnected, 'address:', address);
