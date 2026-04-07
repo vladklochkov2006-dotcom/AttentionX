@@ -91,7 +91,7 @@ const Leagues: React.FC = () => {
     const [activeTournament, setActiveTournament] = useState<Tournament | null>(null);
     const [activeTournamentId, setActiveTournamentId] = useState<number>(0);
     const [hasUserEntered, setHasUserEntered] = useState(false);
-    const [phase, setPhase] = useState<'registration' | 'reveal' | 'active' | 'ended' | 'upcoming' | 'finalized'>('upcoming');
+    const [phase, setPhase] = useState<'registration' | 'active' | 'ended' | 'upcoming' | 'finalized'>('upcoming');
     const [userPrize, setUserPrize] = useState<bigint>(0n);
     const [isClaiming, setIsClaiming] = useState(false);
     const [hasClaimed, setHasClaimed] = useState(false);
@@ -153,8 +153,6 @@ const Leagues: React.FC = () => {
                     setPhase('upcoming');
                 } else if (now >= tournament.registrationStart && now < tournament.startTime) {
                     setPhase('registration');
-                } else if (now >= tournament.startTime && tournament.revealDeadline && now < tournament.revealDeadline) {
-                    setPhase('reveal');
                 } else if (now >= tournament.startTime && now < tournament.endTime) {
                     setPhase('active');
                 } else {
@@ -289,9 +287,7 @@ const Leagues: React.FC = () => {
             return;
         }
         if (phase !== 'registration') {
-            if (phase === 'reveal') {
-                setSubmitError('Registration is closed. Use the "Reveal Lineup" button to reveal your committed squad.');
-            } else if (phase === 'active' || phase === 'ended') {
+            if (phase === 'active' || phase === 'ended') {
                 setSubmitError('Registration for this tournament has closed.');
             } else if (phase === 'upcoming') {
                 setSubmitError('Tournament registration has not started yet.');
@@ -472,9 +468,7 @@ const Leagues: React.FC = () => {
         if (phase === 'registration') {
             return { label: 'Tournament Starts In', value: formatRemaining(activeTournament.startTime - now) };
         }
-        if (phase === 'reveal') {
-            return { label: 'Reveal Deadline In', value: formatRemaining((activeTournament.revealDeadline || activeTournament.endTime) - now) };
-        }
+
         if (phase === 'active') {
             return { label: 'Ends In', value: formatRemaining(activeTournament.endTime - now) };
         }
@@ -487,7 +481,6 @@ const Leagues: React.FC = () => {
     const getPhaseLabel = () => {
         switch (phase) {
             case 'registration': return 'Registration Open';
-            case 'reveal': return 'Reveal Phase';
             case 'active': return 'In Progress';
             case 'ended': return 'Ended';
             case 'finalized': return 'Finalized';
@@ -498,7 +491,6 @@ const Leagues: React.FC = () => {
     const getPhaseColor = () => {
         switch (phase) {
             case 'registration': return 'bg-blue-500';
-            case 'reveal': return 'bg-orange-500';
             case 'active': return 'bg-green-500';
             case 'ended': return 'bg-gray-500';
             case 'finalized': return 'bg-yellow-500';
@@ -913,8 +905,6 @@ const Leagues: React.FC = () => {
                                 <CheckCircle className="w-5 h-5 mr-2" /> You're registered for this tournament
                             </span>
                         </div>
-                    ) : phase === 'reveal' ? (
-                        <span className="text-cyan-500 dark:text-cyan-400 font-bold">Reveal phase — reveal your lineup to confirm entry</span>
                     ) : (phase === 'registration' || phase === 'active') ? (
                         <button
                             onClick={() => setIsJoining(true)}
